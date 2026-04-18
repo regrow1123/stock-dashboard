@@ -1,8 +1,9 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app import api
 from app.db import init_db, make_engine, make_session_factory
@@ -46,4 +47,13 @@ def create_app(engine=None, *, start_scheduler: bool = True) -> FastAPI:
     static_dir = Path("web/static")
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    class NoCacheMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            response = await call_next(request)
+            if request.url.path.startswith(("/static", "/accounts", "/")):
+                response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            return response
+
+    app.add_middleware(NoCacheMiddleware)
     return app

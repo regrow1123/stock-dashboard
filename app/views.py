@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -9,10 +11,12 @@ from app.models import Account
 templates = Jinja2Templates(directory="web/templates")
 router = APIRouter()
 
+_ASSET_VER = str(int(time.time()))  # bumps every process start
+
 
 @router.get("/", response_class=HTMLResponse)
 def overview(request: Request):
-    return templates.TemplateResponse(request, "overview.html")
+    return templates.TemplateResponse(request, "overview.html", {"asset_ver": _ASSET_VER})
 
 
 @router.get("/accounts/{account_id}", response_class=HTMLResponse)
@@ -24,5 +28,6 @@ def account_page(account_id: str, request: Request, db: Session = Depends(get_db
         request,
         "account.html",
         {"account": {"id": acc.id, "name": acc.name,
-                     "broker": acc.broker, "currency": acc.currency}},
+                     "broker": acc.broker, "currency": acc.currency},
+         "asset_ver": _ASSET_VER},
     )
