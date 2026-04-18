@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api import get_db
 from app.config import get_settings
-from app.models import Account, Dividend, PendingConfirm, Trade
+from app.models import Account, Dividend, Meta, PendingConfirm, Trade
 from app.parser import parse_message
 from app.snapshots import recompute_snapshots
 
@@ -83,22 +83,12 @@ def _save_and_recompute(db: Session, p, tg_message_id: int, raw_text: str) -> No
         db.commit()
 
 
-@router.post("/telegram/webhook")
-async def webhook(
-    request: Request,
-    x_telegram_bot_api_secret_token: str | None = Header(default=None),
-    db: Session = Depends(get_db),
-):
+def handle_message(db: Session, msg: dict) -> None:
+    """Process a single Telegram 'message' dict. Used by webhook + polling."""
     settings = get_settings()
-    if x_telegram_bot_api_secret_token != settings.tg_webhook_secret:
-        raise HTTPException(401, "bad secret")
-    body = await request.json()
-    msg = body.get("message") or body.get("edited_message")
-    if not msg:
-        return {"ok": True}
     chat_id = msg["chat"]["id"]
     if chat_id != settings.tg_chat_id:
-        raise HTTPException(403, "forbidden chat")
+        return
     text = msg.get("text", "")
     tg_message_id = msg["message_id"]
 
@@ -124,7 +114,7 @@ async def webhook(
                 send_reply(chat_id, "👍 취소했습니다.", reply_to=tg_message_id)
             db.delete(pending)
             db.commit()
-            return {"ok": True}
+        return
 
     accounts = [
         {"id": a.id, "name": a.name}
@@ -150,8 +140,58 @@ async def webhook(
         db.add(PendingConfirm(tg_message_id=tg_message_id, payload_json=json.dumps(payload)))
         db.commit()
         send_reply(chat_id, _confirm_text(parsed), reply_to=tg_message_id)
-        return {"ok": True}
+        return
 
     _save_and_recompute(db, parsed, tg_message_id, text)
     send_reply(chat_id, _success_text(parsed), reply_to=tg_message_id)
+
+
+@router.post("/telegram/webhook")
+async def webhook(
+    request: Request,
+    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    settings = get_settings()
+    if x_telegram_bot_api_secret_token != settings.tg_webhook_secret:
+        raise HTTPException(401, "bad secret")
+    body = await request.json()
+    msg = body.get("message") or body.get("edited_message")
+    if not msg:
+        return {"ok": True}
+    handle_message(db, msg)
     return {"ok": True}
+
+
+def poll_updates_job(session_factory) -> None:
+    """Long-poll getUpdates. Persist offset in the Meta table so we don't re-process."""
+    db = session_factory()
+    try:
+        settings = get_settings()
+        offset_row = db.get(Meta, "tg_offset")
+        params = {"timeout": 25}
+        if offset_row is not None:
+            params["offset"] = int(offset_row.value) + 1
+        url = f"https://api.telegram.org/bot{settings.tg_bot_token}/getUpdates"
+        try:
+            r = httpx.get(url, params=params, timeout=30)
+            data = r.json()
+        except Exception:
+            return
+        if not data.get("ok"):
+            return
+        last = None
+        for update in data.get("result", []):
+            last = update["update_id"]
+            msg = update.get("message") or update.get("edited_message")
+            if msg:
+                handle_message(db, msg)
+        if last is not None:
+            if offset_row is None:
+                db.add(Meta(key="tg_offset", value=str(last)))
+            else:
+                offset_row.value = str(last)
+            db.commit()
+    finally:
+        if hasattr(db, "close"):
+            db.close()

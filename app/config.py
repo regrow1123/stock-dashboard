@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     tg_bot_token: str
     tg_chat_id: int
     tg_webhook_secret: str
+    tg_polling: bool = True
     claude_bin: str = "claude"
     db_path: Path = Path("./data/dashboard.db")
     seed_path: Path = Path("./seed/initial_holdings.yaml")

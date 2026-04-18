@@ -93,6 +93,72 @@ def test_low_confidence_creates_pending(db, engine, monkeypatch):
     assert db.query(PendingConfirm).count() == 1
 
 
+def test_handle_message_skips_foreign_chat(db, monkeypatch):
+    from app.telegram import handle_message
+    monkeypatch.setenv("TG_BOT_TOKEN", "t")
+    monkeypatch.setenv("TG_CHAT_ID", "42")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    from app.config import get_settings
+    get_settings.cache_clear()
+    sent = []
+    monkeypatch.setattr("app.telegram.send_reply",
+                        lambda chat_id, text, **kw: sent.append(text))
+
+    handle_message(db, {
+        "message_id": 1, "text": "hi",
+        "chat": {"id": 999, "type": "private"},
+    })
+    from app.models import Trade
+    assert db.query(Trade).count() == 0
+    assert sent == []
+
+
+def test_polling_processes_new_update_and_stores_offset(db, monkeypatch):
+    from app.models import Account, Meta, Trade
+    from app.telegram import poll_updates_job
+    db.add(Account(id="a", name="N", broker="B", currency="USD", display_order=1))
+    db.commit()
+
+    monkeypatch.setenv("TG_BOT_TOKEN", "t")
+    monkeypatch.setenv("TG_CHAT_ID", "42")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    from app.config import get_settings
+    get_settings.cache_clear()
+
+    def fake_get(url, params=None, timeout=None):
+        class R:
+            def json(self):
+                return {
+                    "ok": True,
+                    "result": [
+                        {"update_id": 77,
+                         "message": {
+                             "message_id": 1, "text": "x",
+                             "chat": {"id": 42, "type": "private"},
+                         }},
+                    ],
+                }
+        return R()
+    monkeypatch.setattr("app.telegram.httpx.get", fake_get)
+
+    from datetime import date
+    from app.parser import ParseResult
+    def fake_parse(message, accounts, today):
+        return ParseResult(
+            type="trade", account="a", ticker="X", side="buy",
+            quantity=1, price=1, amount=None,
+            executed_at=date(2026, 4, 18), paid_at=None,
+            confidence=0.95, note="", raw={},
+        )
+    monkeypatch.setattr("app.telegram.parse_message", fake_parse)
+    monkeypatch.setattr("app.telegram.send_reply",
+                        lambda *a, **kw: None)
+
+    poll_updates_job(session_factory=lambda: db)
+    assert db.query(Trade).count() == 1
+    assert db.get(Meta, "tg_offset").value == "77"
+
+
 def test_high_confidence_trade_null_account_goes_to_pending(db, engine, monkeypatch):
     """High-confidence trade with account=None must route to PendingConfirm, not Trade."""
     db.add(Account(id="mirae_kr", name="미래에셋 국내", broker="미래에셋",
