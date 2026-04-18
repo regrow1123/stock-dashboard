@@ -137,7 +137,8 @@ def handle_message(db: Session, msg: dict) -> None:
         payload["executed_at"] = parsed.executed_at.isoformat() if parsed.executed_at else None
         payload["paid_at"] = parsed.paid_at.isoformat() if parsed.paid_at else None
         payload.pop("raw", None)
-        db.add(PendingConfirm(tg_message_id=tg_message_id, payload_json=json.dumps(payload)))
+        payload["_raw_text"] = text
+        db.add(PendingConfirm(tg_message_id=tg_message_id, payload_json=json.dumps(payload, ensure_ascii=False)))
         db.commit()
         send_reply(chat_id, _confirm_text(parsed), reply_to=tg_message_id)
         return

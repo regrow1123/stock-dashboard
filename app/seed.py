@@ -3,11 +3,14 @@ from pathlib import Path
 import yaml
 from sqlalchemy.orm import Session
 
-from app.models import Account, SeedHolding
+from app.models import Account, Instrument, SeedHolding
 
 
 def load_seed(db: Session, path: Path) -> None:
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    instruments_cache: dict[str, Instrument] = {
+        i.ticker: i for i in db.query(Instrument).all()
+    }
     for a in data.get("accounts", []):
         acc = db.get(Account, a["id"])
         if acc is None:
@@ -26,4 +29,14 @@ def load_seed(db: Session, path: Path) -> None:
                 db.add(row)
             row.quantity = float(h["quantity"])
             row.avg_price = float(h["avg_price"])
+
+            name = h.get("name")
+            if name:
+                inst = instruments_cache.get(h["ticker"])
+                if inst is None:
+                    inst = Instrument(ticker=h["ticker"], name=name)
+                    db.add(inst)
+                    instruments_cache[h["ticker"]] = inst
+                else:
+                    inst.name = name
     db.commit()

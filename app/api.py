@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.metrics import avg_cost_from_seed_and_trades, pct_return, weights_from_values
 from app.models import (
-    Account, Dividend, LivePrice, SeedHolding, Snapshot, Trade,
+    Account, Dividend, Instrument, LivePrice, SeedHolding, Snapshot, Trade,
 )
 
 router = APIRouter(prefix="/api")
@@ -21,6 +21,10 @@ def _live(db: Session, ticker: str) -> float | None:
     return float(r.price) if r else None
 
 
+def _name_map(db: Session) -> dict[str, str]:
+    return {i.ticker: i.name for i in db.query(Instrument).all()}
+
+
 def _holdings_for(db: Session, account_id: str) -> list[dict[str, Any]]:
     seeds = {
         sh.ticker: sh
@@ -32,6 +36,7 @@ def _holdings_for(db: Session, account_id: str) -> list[dict[str, Any]]:
     ):
         trades_by_ticker.setdefault(t.ticker, []).append(t)
     tickers = set(seeds) | set(trades_by_ticker)
+    names = _name_map(db)
     out: list[dict[str, Any]] = []
     for tk in tickers:
         seed = seeds.get(tk)
@@ -47,6 +52,7 @@ def _holdings_for(db: Session, account_id: str) -> list[dict[str, Any]]:
         cost = qty * avg
         out.append({
             "ticker": tk,
+            "name": names.get(tk, tk),
             "quantity": qty,
             "avg_price": avg,
             "cost": cost,
@@ -80,8 +86,12 @@ def account_weights(account_id: str, db: Session = Depends(get_db)):
     if db.get(Account, account_id) is None:
         raise HTTPException(404)
     rows = _holdings_for(db, account_id)
+    names = {r["ticker"]: r["name"] for r in rows}
     values = {r["ticker"]: r["value"] for r in rows}
-    return [{"ticker": k, "weight": v} for k, v in weights_from_values(values).items()]
+    return [
+        {"ticker": k, "name": names.get(k, k), "weight": v}
+        for k, v in weights_from_values(values).items()
+    ]
 
 
 @router.get("/summary")
@@ -140,9 +150,10 @@ def account_trades(account_id: str, limit: int = 20, db: Session = Depends(get_d
         .limit(limit)
         .all()
     )
+    names = _name_map(db)
     return [
-        {"id": t.id, "ticker": t.ticker, "side": t.side,
-         "quantity": t.quantity, "price": t.price,
+        {"id": t.id, "ticker": t.ticker, "name": names.get(t.ticker, t.ticker),
+         "side": t.side, "quantity": t.quantity, "price": t.price,
          "executed_at": t.executed_at.isoformat()}
         for t in rows
     ]
@@ -195,7 +206,12 @@ def account_realized(account_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/accounts/{account_id}/benchmark")
-def account_benchmark(account_id: str, db: Session = Depends(get_db)):
+def account_benchmark(
+    account_id: str,
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    db: Session = Depends(get_db),
+):
     acc = db.get(Account, account_id)
     if acc is None:
         raise HTTPException(404)
@@ -203,21 +219,31 @@ def account_benchmark(account_id: str, db: Session = Depends(get_db)):
     if bench_ticker is None:
         raise HTTPException(400, "no benchmark configured for this currency")
 
+    snap_q = db.query(Snapshot).filter_by(account_id=account_id)
+    if from_date is not None:
+        snap_q = snap_q.filter(Snapshot.date >= from_date)
+    if to_date is not None:
+        snap_q = snap_q.filter(Snapshot.date <= to_date)
     by_date: dict[date, float] = {}
-    for s in db.query(Snapshot).filter_by(account_id=account_id).all():
+    for s in snap_q.all():
         by_date[s.date] = by_date.get(s.date, 0.0) + s.value
     port = sorted(by_date.items())
-    bench = [
-        (b.date, b.close)
-        for b in db.query(_Bench).filter_by(ticker=bench_ticker).order_by(_Bench.date).all()
-    ]
+
+    bench_q = db.query(_Bench).filter_by(ticker=bench_ticker)
+    if from_date is not None:
+        bench_q = bench_q.filter(_Bench.date >= from_date)
+    if to_date is not None:
+        bench_q = bench_q.filter(_Bench.date <= to_date)
+    bench = [(b.date, b.close) for b in bench_q.order_by(_Bench.date).all()]
     if port:
         start = port[0][0]
         bench = [(d, v) for d, v in bench if d >= start]
     port_rebased = rebase_series(port)
     bench_rebased = rebase_series(bench)
+    bench_name = {"^KS11": "KOSPI", "^GSPC": "S&P 500"}.get(bench_ticker, bench_ticker)
     return {
         "benchmark_ticker": bench_ticker,
+        "benchmark_name": bench_name,
         "portfolio": [{"date": d.isoformat(), "value": v} for d, v in port_rebased],
         "benchmark": [{"date": d.isoformat(), "value": v} for d, v in bench_rebased],
     }

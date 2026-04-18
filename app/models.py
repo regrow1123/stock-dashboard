@@ -109,3 +109,9 @@ class PendingConfirm(Base):
     tg_message_id: Mapped[int] = mapped_column(Integer, nullable=False)
     payload_json: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[_dt] = mapped_column(DateTime, default=_now_utc)
+
+
+class Instrument(Base):
+    __tablename__ = "instruments"
+    ticker: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
