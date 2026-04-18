@@ -90,6 +90,28 @@ def test_realized_endpoint(db, engine, monkeypatch):
     assert data["realized"] == 200.0  # 4*(150-100)
 
 
+def test_history_date_filter(db, engine, monkeypatch):
+    from app.models import Snapshot
+    db.add(Account(id="a", name="N", broker="B", currency="USD", display_order=1))
+    db.add_all([
+        Snapshot(date=date(2026, 4, 15), account_id="a", ticker="X",
+                 quantity=10, close=100, value=1000),
+        Snapshot(date=date(2026, 4, 16), account_id="a", ticker="X",
+                 quantity=10, close=110, value=1100),
+        Snapshot(date=date(2026, 4, 17), account_id="a", ticker="X",
+                 quantity=10, close=120, value=1200),
+    ])
+    db.commit()
+    app = _app_with_engine(engine, monkeypatch)
+    c = TestClient(app)
+    r = c.get("/api/accounts/a/history?from=2026-04-16&to=2026-04-16")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) == 1
+    assert data[0]["date"] == "2026-04-16"
+    assert data[0]["value"] == 1100.0
+
+
 def test_benchmark_endpoint_rebased(db, engine, monkeypatch):
     from datetime import date
     from app.models import Account, Benchmark, SeedHolding, Snapshot

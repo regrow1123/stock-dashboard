@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.metrics import avg_cost_from_seed_and_trades, pct_return, weights_from_values
@@ -110,11 +110,21 @@ def summary(db: Session = Depends(get_db)):
 
 
 @router.get("/accounts/{account_id}/history")
-def account_history(account_id: str, db: Session = Depends(get_db)):
+def account_history(
+    account_id: str,
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    db: Session = Depends(get_db),
+):
     if db.get(Account, account_id) is None:
         raise HTTPException(404)
+    q = db.query(Snapshot).filter_by(account_id=account_id)
+    if from_date is not None:
+        q = q.filter(Snapshot.date >= from_date)
+    if to_date is not None:
+        q = q.filter(Snapshot.date <= to_date)
     by_date: dict[date, float] = {}
-    for s in db.query(Snapshot).filter_by(account_id=account_id).all():
+    for s in q.all():
         by_date[s.date] = by_date.get(s.date, 0.0) + s.value
     return [{"date": d.isoformat(), "value": v} for d, v in sorted(by_date.items())]
 

@@ -1,9 +1,14 @@
-from datetime import date, datetime
+from datetime import UTC, date
+from datetime import datetime as _dt
 
 from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+
+
+def _now_utc() -> _dt:
+    return _dt.now(UTC)
 
 
 class Account(Base):
@@ -26,7 +31,7 @@ class Trade(Base):
     executed_at: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     raw_text: Mapped[str] = mapped_column(String, default="")
     tg_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[_dt] = mapped_column(DateTime, default=_now_utc)
 
 
 class Dividend(Base):
@@ -65,7 +70,7 @@ class LivePrice(Base):
     ticker: Mapped[str] = mapped_column(String, primary_key=True)
     price: Mapped[float] = mapped_column(Float, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
-    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    fetched_at: Mapped[_dt] = mapped_column(DateTime, nullable=False)
 
 
 class Snapshot(Base):
@@ -103,4 +108,4 @@ class PendingConfirm(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tg_message_id: Mapped[int] = mapped_column(Integer, nullable=False)
     payload_json: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[_dt] = mapped_column(DateTime, default=_now_utc)

@@ -132,7 +132,17 @@ async def webhook(
     ]
     parsed = parse_message(text, accounts=accounts, today=date.today())
 
-    if parsed.type == "unknown" or parsed.confidence < CONFIDENCE_THRESHOLD:
+    # Route to pending if confidence is low, type is unknown, or required fields are missing
+    def _needs_confirm(p) -> bool:
+        if p.type == "unknown" or p.confidence < CONFIDENCE_THRESHOLD:
+            return True
+        if p.type == "trade":
+            return not all([p.account, p.ticker, p.side, p.quantity, p.price, p.executed_at])
+        if p.type == "dividend":
+            return not all([p.account, p.ticker, p.amount, p.paid_at])
+        return True
+
+    if _needs_confirm(parsed):
         payload = asdict(parsed)
         payload["executed_at"] = parsed.executed_at.isoformat() if parsed.executed_at else None
         payload["paid_at"] = parsed.paid_at.isoformat() if parsed.paid_at else None
