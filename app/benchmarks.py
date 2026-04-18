@@ -1,9 +1,11 @@
 from datetime import date
 
+import pandas as pd
 import yfinance as yf
 from sqlalchemy.orm import Session
 
 from app.models import Benchmark
+from app.prices import _close_series
 
 
 def backfill_benchmark(db: Session, *, ticker: str, start: date, end: date) -> int:
@@ -13,6 +15,7 @@ def backfill_benchmark(db: Session, *, ticker: str, start: date, end: date) -> i
     )
     if df is None or df.empty:
         return 0
+    closes = _close_series(df, ticker)
     existing = {
         r.date: r
         for r in db.query(Benchmark).filter(
@@ -20,9 +23,11 @@ def backfill_benchmark(db: Session, *, ticker: str, start: date, end: date) -> i
         ).all()
     }
     n = 0
-    for ts, row in df.iterrows():
+    for ts, close_val in closes.items():
+        if pd.isna(close_val):
+            continue
         d = ts.date() if hasattr(ts, "date") else ts
-        close = float(row["Close"])
+        close = float(close_val)
         r = existing.get(d)
         if r is None:
             db.add(Benchmark(ticker=ticker, date=d, close=close))

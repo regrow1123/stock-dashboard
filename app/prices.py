@@ -1,10 +1,19 @@
 from datetime import date, datetime, timedelta
 from typing import Iterable
 
+import pandas as pd
 import yfinance as yf
 from sqlalchemy.orm import Session
 
 from app.models import LivePrice, Price
+
+
+def _close_series(df: "pd.DataFrame", ticker: str) -> "pd.Series":
+    """Handle both flat and multi-indexed yfinance frames."""
+    col = df["Close"]
+    if isinstance(col, pd.DataFrame):
+        return col[ticker] if ticker in col.columns else col.iloc[:, 0]
+    return col
 
 
 def backfill_prices(
@@ -16,6 +25,7 @@ def backfill_prices(
     )
     if df is None or df.empty:
         return 0
+    closes = _close_series(df, ticker)
     n = 0
     existing = {
         r.date: r
@@ -23,9 +33,11 @@ def backfill_prices(
             Price.ticker == ticker, Price.date >= start, Price.date < end
         ).all()
     }
-    for ts, row in df.iterrows():
+    for ts, close_val in closes.items():
+        if pd.isna(close_val):
+            continue
         d = ts.date() if hasattr(ts, "date") else ts
-        close = float(row["Close"])
+        close = float(close_val)
         r = existing.get(d)
         if r is None:
             r = Price(ticker=ticker, date=d, close=close, currency=currency)
