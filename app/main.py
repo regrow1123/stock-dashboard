@@ -29,6 +29,9 @@ def create_app(engine=None, *, start_scheduler: bool = True) -> FastAPI:
     from app import telegram as tg
     app.include_router(tg.router)
 
+    from app import views
+    app.include_router(views.router)
+
     if start_scheduler:
         scheduler = make_scheduler(SessionLocal)
 

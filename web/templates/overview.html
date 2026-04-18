@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<h1>포트폴리오 오버뷰</h1>
+<div class="totals" id="totals"></div>
+<div class="cards" id="accounts"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const fmt = (n, cur) => new Intl.NumberFormat('ko-KR',
+  { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(n);
+const pct = n => (n * 100).toFixed(2) + '%';
+
+async function load() {
+  const s = await fetch('/api/summary').then(r => r.json());
+  const totals = document.getElementById('totals');
+  totals.innerHTML = s.totals.map(t => `
+    <div class="card">
+      <div class="kv"><span>${t.currency} 합계</span><strong>${fmt(t.value, t.currency)}</strong></div>
+      <div class="kv"><span>원가</span><strong>${fmt(t.cost, t.currency)}</strong></div>
+      <div class="kv"><span>수익률</span>
+        <strong class="${t.pct_return >= 0 ? 'pos' : 'neg'}">${pct(t.pct_return)}</strong>
+      </div>
+    </div>`).join('');
+
+  const accs = document.getElementById('accounts');
+  accs.innerHTML = s.accounts.map(a => `
+    <div class="card"><a href="/accounts/${a.account_id}">
+      <h2>${a.name}<span class="tag">${a.broker}</span></h2>
+      <div class="kv"><span>평가</span><strong>${fmt(a.value, a.currency)}</strong></div>
+      <div class="kv"><span>원가</span><strong>${fmt(a.cost, a.currency)}</strong></div>
+      <div class="kv"><span>수익률</span>
+        <strong class="${a.pct_return >= 0 ? 'pos' : 'neg'}">${pct(a.pct_return)}</strong>
+      </div>
+    </a></div>`).join('');
+}
+load();
+setInterval(load, 15 * 60 * 1000);
+</script>
+{% endblock %}
