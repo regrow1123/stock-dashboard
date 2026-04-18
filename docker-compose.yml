@@ -2,10 +2,14 @@ services:
   app:
     build: .
     restart: unless-stopped
+    user: "1000:1000"
     env_file: .env
+    environment:
+      HOME: /home/appuser
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8090:8080"
     volumes:
       - ./data:/app/data
       - ./seed:/app/seed:ro
-      - ${HOME}/.claude:/root/.claude   # reuse host claude auth
+      - ${HOME}/.claude:/home/appuser/.claude   # reuse host claude auth
+      - ${HOME}/.claude.json:/home/appuser/.claude.json

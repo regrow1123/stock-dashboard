@@ -17,7 +17,8 @@ COPY app ./app
 COPY web ./web
 COPY seed ./seed
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data /home/appuser \
+ && chown -R 1000:1000 /app/data /home/appuser
 
 EXPOSE 8080
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
