@@ -151,3 +151,63 @@ def account_dividends(account_id: str, db: Session = Depends(get_db)):
             for r in rows
         ],
     }
+
+
+from app.benchmarks import BENCHMARK_FOR_CURRENCY, rebase_series
+from app.metrics import fifo_realized_pnl
+from app.models import Benchmark as _Bench
+
+
+@router.get("/accounts/{account_id}/realized")
+def account_realized(account_id: str, db: Session = Depends(get_db)):
+    acc = db.get(Account, account_id)
+    if acc is None:
+        raise HTTPException(404)
+    total = 0.0
+    by_ticker: dict[str, float] = {}
+    trades_by_ticker: dict[str, list[Trade]] = {}
+    for t in (
+        db.query(Trade).filter_by(account_id=account_id).order_by(Trade.executed_at).all()
+    ):
+        trades_by_ticker.setdefault(t.ticker, []).append(t)
+    seeds = {s.ticker: s for s in db.query(SeedHolding).filter_by(account_id=account_id).all()}
+    for tk, trades in trades_by_ticker.items():
+        s = seeds.get(tk)
+        pnl = fifo_realized_pnl(
+            seed_qty=s.quantity if s else 0.0,
+            seed_avg=s.avg_price if s else 0.0,
+            trades=trades,
+        )
+        by_ticker[tk] = pnl
+        total += pnl
+    return {"realized": total,
+            "by_ticker": [{"ticker": k, "realized": v} for k, v in by_ticker.items()]}
+
+
+@router.get("/accounts/{account_id}/benchmark")
+def account_benchmark(account_id: str, db: Session = Depends(get_db)):
+    acc = db.get(Account, account_id)
+    if acc is None:
+        raise HTTPException(404)
+    bench_ticker = BENCHMARK_FOR_CURRENCY.get(acc.currency)
+    if bench_ticker is None:
+        raise HTTPException(400, "no benchmark configured for this currency")
+
+    by_date: dict[date, float] = {}
+    for s in db.query(Snapshot).filter_by(account_id=account_id).all():
+        by_date[s.date] = by_date.get(s.date, 0.0) + s.value
+    port = sorted(by_date.items())
+    bench = [
+        (b.date, b.close)
+        for b in db.query(_Bench).filter_by(ticker=bench_ticker).order_by(_Bench.date).all()
+    ]
+    if port:
+        start = port[0][0]
+        bench = [(d, v) for d, v in bench if d >= start]
+    port_rebased = rebase_series(port)
+    bench_rebased = rebase_series(bench)
+    return {
+        "benchmark_ticker": bench_ticker,
+        "portfolio": [{"date": d.isoformat(), "value": v} for d, v in port_rebased],
+        "benchmark": [{"date": d.isoformat(), "value": v} for d, v in bench_rebased],
+    }
