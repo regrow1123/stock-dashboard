@@ -1,0 +1,19 @@
+accounts:
+  - id: mirae_kr
+    name: 미래에셋 국내
+    broker: 미래에셋
+    currency: KRW
+    display_order: 1
+    holdings:
+      - ticker: 005930.KS
+        quantity: 10
+        avg_price: 70000
+  - id: ibkr_us
+    name: IBKR 미국
+    broker: IBKR
+    currency: USD
+    display_order: 2
+    holdings:
+      - ticker: AAPL
+        quantity: 5
+        avg_price: 170
