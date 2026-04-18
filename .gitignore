@@ -9,3 +9,6 @@ data/*.db-*
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+
+# Personal data — keep only the .example file in repo
+seed/initial_holdings.yaml
