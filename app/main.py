@@ -25,6 +25,9 @@ def create_app(engine=None) -> FastAPI:
     app.dependency_overrides[api.get_db] = get_db
     app.include_router(api.router)
 
+    from app import telegram as tg
+    app.include_router(tg.router)
+
     static_dir = Path("web/static")
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
