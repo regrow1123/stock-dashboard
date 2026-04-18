@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ account.name }}{% endblock %}
+{% block content %}
+<h1>{{ account.name }} <span class="tag">{{ account.broker }}</span></h1>
+<div id="header-cards" class="totals"></div>
+
+<h2>종목별 비중</h2>
+<div style="max-width:420px;"><canvas id="pie"></canvas></div>
+
+<h2>보유 종목</h2>
+<table id="holdings"><thead>
+  <tr><th>종목</th><th>수량</th><th>평단</th><th>현재가</th><th>평가</th><th>손익</th><th>수익률</th></tr>
+</thead><tbody></tbody></table>
+
+<h2>자산 추이 vs 벤치마크</h2>
+<div style="max-width:900px;"><canvas id="history"></canvas></div>
+
+<div class="totals" style="margin-top:24px;">
+  <div class="card">
+    <div class="kv"><span>실현손익</span><strong id="realized">—</strong></div>
+  </div>
+  <div class="card">
+    <div class="kv"><span>배당 누계</span><strong id="dividend">—</strong></div>
+  </div>
+</div>
+
+<h2>최근 매매</h2>
+<table id="trades"><thead>
+  <tr><th>일자</th><th>종목</th><th>구분</th><th>수량</th><th>가격</th></tr>
+</thead><tbody></tbody></table>
+{% endblock %}
+{% block scripts %}
+<script>
+const ACCOUNT_ID = {{ account.id | tojson }};
+const CURRENCY = {{ account.currency | tojson }};
+</script>
+<script src="/static/app.js"></script>
+{% endblock %}
