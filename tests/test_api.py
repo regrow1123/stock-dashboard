@@ -32,7 +32,7 @@ def _app_with_engine(engine, monkeypatch):
     monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
     from app.config import get_settings
     get_settings.cache_clear()
-    return create_app(engine=engine)
+    return create_app(engine=engine, start_scheduler=False)
 
 
 def test_accounts_endpoint(db, engine, monkeypatch):

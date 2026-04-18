@@ -37,7 +37,7 @@ def _install(monkeypatch, engine, chat_id: int = 42, secret: str = "s"):
 
 def test_webhook_rejects_wrong_secret(db, engine, monkeypatch):
     _install(monkeypatch, engine, secret="s")
-    app = create_app(engine=engine)
+    app = create_app(engine=engine, start_scheduler=False)
     c = TestClient(app)
     r = c.post("/telegram/webhook", json=_payload("hi"),
                headers={"X-Telegram-Bot-Api-Secret-Token": "wrong"})
@@ -60,7 +60,7 @@ def test_high_confidence_trade_is_saved(db, engine, monkeypatch):
         )
     monkeypatch.setattr("app.telegram.parse_message", fake_parse)
 
-    app = create_app(engine=engine)
+    app = create_app(engine=engine, start_scheduler=False)
     c = TestClient(app)
     r = c.post("/telegram/webhook", json=_payload("오늘 005930 10주 75000에 매수"),
                headers={"X-Telegram-Bot-Api-Secret-Token": "s"})
@@ -85,7 +85,7 @@ def test_low_confidence_creates_pending(db, engine, monkeypatch):
         )
     monkeypatch.setattr("app.telegram.parse_message", fake_parse)
 
-    app = create_app(engine=engine)
+    app = create_app(engine=engine, start_scheduler=False)
     c = TestClient(app)
     c.post("/telegram/webhook", json=_payload("혹시 삼성 샀나"),
            headers={"X-Telegram-Bot-Api-Secret-Token": "s"})
