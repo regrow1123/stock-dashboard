@@ -162,6 +162,45 @@
     })[c]);
   }
 
+  // External Chart.js tooltip — renders into a single .chart-tooltip DOM
+  // element appended once into the .chart-canvas-wrap container.
+  function externalTooltip(context) {
+    const { chart, tooltip } = context;
+    const wrap = chart.canvas.parentNode;
+    if (!wrap) return;
+    let el = wrap.querySelector('.chart-tooltip');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'chart-tooltip';
+      wrap.appendChild(el);
+    }
+    if (tooltip.opacity === 0) {
+      el.classList.remove('is-visible');
+      return;
+    }
+    const dp = tooltip.dataPoints || [];
+    if (!dp.length) return;
+    const date = tooltip.title?.[0] || '';
+    // both datasets are TWR-rebased to 1.0
+    const rows = dp.map((p) => {
+      const delta = p.parsed.y - 1;
+      const sign = delta >= 0 ? '+' : '';
+      const cls = delta >= 0 ? 'pos' : 'neg';
+      const key = p.datasetIndex === 0 ? 'PORT' : 'BMK';
+      return `<div class="tt-row">
+      <span class="tt-key">${key}</span>
+      <span class="tt-val ${cls}">${sign}${(delta * 100).toFixed(2)}%</span>
+    </div>`;
+    }).join('');
+    el.innerHTML = `<div class="tt-date">${date}</div>${rows}`;
+
+    const left = tooltip.caretX;
+    const top = tooltip.caretY;
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.classList.add('is-visible');
+  }
+
   // ---------- Chart.js defaults ----------
 
   function applyChartDefaults() {
@@ -588,7 +627,12 @@
         animation: reducedMotion.matches ? false : { duration: 220 },
         plugins: {
           legend: { display: false },
-          tooltip: { enabled: false }, // we render our own DOM tooltip in Task 7
+          tooltip: {
+            enabled: false,
+            external: externalTooltip,
+            mode: 'index',
+            intersect: false,
+          },
         },
         scales: {
           x: { display: false },
