@@ -566,7 +566,6 @@
   narrow.addEventListener?.('change', () => {
     if (histChart) {
       histChart.options.aspectRatio = narrow.matches ? 1.3 : 2.4;
-      histChart.options.scales.x.ticks.maxTicksLimit = narrow.matches ? 4 : 7;
       histChart.update('none');
     }
   });
