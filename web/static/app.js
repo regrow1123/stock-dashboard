@@ -52,6 +52,64 @@
     return `rgba(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`;
   }
 
+  // Chart.js plugin: draws an idle marker at the last portfolio point and
+  // a vertical crosshair when a tooltip is active.
+  const chartOrnamentsPlugin = {
+    id: 'ornaments',
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea, scales, tooltip } = chart;
+      const ds = chart.data.datasets[0];
+      if (!ds || !ds.data || !ds.data.length) return;
+
+      const markerColor = colorOf('--chart-marker', '#1c1917');
+      const axisColor   = colorOf('--chart-axis', '#a8a29e');
+
+      const isHovering = tooltip && tooltip.opacity !== 0 && tooltip.dataPoints?.length;
+
+      if (isHovering) {
+        const x = tooltip.caretX;
+        ctx.save();
+        ctx.strokeStyle = axisColor;
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // dots at the two intersected datasets
+        tooltip.dataPoints.forEach((dp, i) => {
+          const isPort = dp.datasetIndex === 0;
+          ctx.beginPath();
+          ctx.arc(dp.element.x, dp.element.y, isPort ? 3.5 : 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = isPort ? markerColor : axisColor;
+          ctx.strokeStyle = colorOf('--chart-card-bg', '#ffffff');
+          ctx.lineWidth = isPort ? 1.5 : 1;
+          ctx.fill();
+          ctx.stroke();
+        });
+        ctx.restore();
+        return;
+      }
+
+      // idle: small dot at last non-null portfolio point
+      let lastIdx = -1;
+      for (let i = ds.data.length - 1; i >= 0; i--) {
+        if (ds.data[i] != null) { lastIdx = i; break; }
+      }
+      if (lastIdx < 0) return;
+      const x = scales.x.getPixelForValue(lastIdx);
+      const y = scales.y.getPixelForValue(ds.data[lastIdx]);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = markerColor;
+      ctx.fill();
+      ctx.restore();
+    },
+  };
+
   // ---------- Alpine wiring ----------
 
   document.addEventListener('alpine:init', () => {
@@ -521,6 +579,7 @@
           },
         ],
       },
+      plugins: [chartOrnamentsPlugin],
       options: {
         responsive: true,
         maintainAspectRatio: true,
