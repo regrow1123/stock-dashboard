@@ -30,6 +30,22 @@
   --color-negative:      #dc2626;
   --color-negative-soft: #fee2e2;
 
+  /* chart-specific tokens — Editorial Mono */
+  --chart-card-bg:       #fafaf7;
+  --chart-card-border:   #e8e6df;
+  --chart-title:         #78716c;
+  --chart-tag:           #a8a29e;
+  --chart-hero:          #1c1917;
+  --chart-hero-pos:      #1c1917;
+  --chart-hero-neg:      #b91c1c;
+  --chart-line:          #1c1917;
+  --chart-line-bench:    #a8a29e;
+  --chart-axis:          #a8a29e;
+  --chart-grid:          #e8e6df;
+  --chart-marker:        #1c1917;
+  --chart-tooltip-bg:    #ffffff;
+  --chart-tooltip-border:#e8e6df;
+
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 12px rgb(15 23 42 / 0.04);
   --shadow-pop:  0 8px 24px rgb(15 23 42 / 0.12);
 
@@ -53,6 +69,21 @@
     --color-positive-soft: #052e22;
     --color-negative:      #f87171;
     --color-negative-soft: #3b1111;
+
+    --chart-card-bg:       #0c0c0e;
+    --chart-card-border:   #1f1f23;
+    --chart-title:         #71717a;
+    --chart-tag:           #a1a1aa;
+    --chart-hero:          #fafafa;
+    --chart-hero-pos:      #a3e635;
+    --chart-hero-neg:      #fb7185;
+    --chart-line:          #fafafa;
+    --chart-line-bench:    #71717a;
+    --chart-axis:          #52525b;
+    --chart-grid:          #1f1f23;
+    --chart-marker:        #a3e635;
+    --chart-tooltip-bg:    #18181b;
+    --chart-tooltip-border:#27272a;
 
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 14px rgb(0 0 0 / 0.35);
     --shadow-pop:  0 12px 36px rgb(0 0 0 / 0.55);
