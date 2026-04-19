@@ -22,17 +22,25 @@
 </section>
 
 <section aria-labelledby="history-heading">
-  <div class="section-heading">
-    <h2 id="history-heading">자산 추이 vs 벤치마크</h2>
-    <div class="chip-group" role="tablist" aria-label="기간 선택" id="range-tabs">
-      <button type="button" class="chip" role="tab" data-range="1M">1M</button>
-      <button type="button" class="chip" role="tab" data-range="3M">3M</button>
-      <button type="button" class="chip" role="tab" data-range="6M">6M</button>
-      <button type="button" class="chip" role="tab" data-range="1Y" aria-selected="true">1Y</button>
+  <h2 id="history-heading" class="sr-only">자산 추이 vs 벤치마크</h2>
+  <div class="chart-card" id="history-wrap" aria-busy="true">
+    <div class="chart-card-head">
+      <span class="chart-card-title" id="history-title">자산 추이 · vs —</span>
+      <div class="chip-group chip-group-mono" role="tablist" aria-label="기간 선택" id="range-tabs">
+        <button type="button" class="chip" role="tab" data-range="1M">1M</button>
+        <button type="button" class="chip" role="tab" data-range="3M">3M</button>
+        <button type="button" class="chip" role="tab" data-range="6M">6M</button>
+        <button type="button" class="chip" role="tab" data-range="1Y" aria-selected="true">1Y</button>
+      </div>
     </div>
-  </div>
-  <div class="card card-body" aria-busy="true" id="history-wrap">
-    <canvas id="history" role="img" aria-labelledby="history-summary"></canvas>
+    <div class="chart-card-stats">
+      <span id="history-hero" class="chart-hero">—</span>
+      <span id="history-bench-stat" class="chart-stat-bench">—</span>
+    </div>
+    <div class="chart-canvas-wrap">
+      <canvas id="history" role="img" aria-labelledby="history-summary"></canvas>
+    </div>
+    <div id="history-xlabels" class="chart-xlabels" aria-hidden="true"></div>
     <p id="history-summary" class="sr-only">자산 추이 차트를 불러오는 중입니다.</p>
   </div>
 </section>
