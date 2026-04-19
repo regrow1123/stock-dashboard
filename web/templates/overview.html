@@ -1,46 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Overview{% endblock %}
+{% block title %}포트폴리오{% endblock %}
+{% block header_title %}포트폴리오{% endblock %}
+
 {% block content %}
-<h1>포트폴리오</h1>
-<div class="totals" id="totals"></div>
-<h2>계좌</h2>
-<div class="cards" id="accounts"></div>
-{% endblock %}
-{% block scripts %}
-<script>
-const fmt = (n, cur) => new Intl.NumberFormat('ko-KR',
-  { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(n);
-const pctStr = n => (n >= 0 ? '+' : '') + (n * 100).toFixed(2) + '%';
-const signed = (n, cur) => new Intl.NumberFormat('ko-KR',
-  { style: 'currency', currency: cur, maximumFractionDigits: 0, signDisplay: 'always' }).format(n);
+<section aria-labelledby="hero-heading" class="mt-1">
+  <h2 id="hero-heading" class="sr-only">총합</h2>
 
-async function load() {
-  const s = await fetch('/api/summary').then(r => r.json());
-  document.getElementById('totals').innerHTML = s.totals.map(t => `
-    <div class="card">
-      <div class="kv"><span>${t.currency} 합계</span>
-        <span class="pill ${t.pct_return>=0?'pos':'neg'}">${pctStr(t.pct_return)}</span>
-      </div>
-      <div class="kv big"><span>평가</span><strong>${fmt(t.value, t.currency)}</strong></div>
-      <div class="kv"><span>평가손익</span>
-        <strong class="${t.pnl>=0?'pos':'neg'}">${signed(t.pnl, t.currency)}</strong>
-      </div>
-    </div>`).join('');
+  <div id="currency-switch" class="mb-3" hidden>
+    <div class="chip-group" role="tablist" aria-label="통화 선택"></div>
+  </div>
 
-  document.getElementById('accounts').innerHTML = s.accounts.map(a => `
-    <div class="card"><a href="/accounts/${a.account_id}">
-      <h2>${a.name}<span class="tag">${a.broker}</span></h2>
-      <div class="kv big"><span>평가</span><strong>${fmt(a.value, a.currency)}</strong></div>
-      <div class="kv"><span>원가</span><strong>${fmt(a.cost, a.currency)}</strong></div>
-      <div class="kv"><span>수익률</span>
-        <span class="pill ${a.pct_return>=0?'pos':'neg'}">${pctStr(a.pct_return)}</span>
-      </div>
-      <div class="kv"><span>평가손익</span>
-        <strong class="${a.pnl>=0?'pos':'neg'}">${signed(a.pnl, a.currency)}</strong>
-      </div>
-    </a></div>`).join('');
-}
-load();
-setInterval(load, 15 * 60 * 1000);
-</script>
+  <div id="hero" aria-live="polite" aria-busy="true">
+    <div class="card card-body">
+      <div class="kv"><span class="label">평가 합계</span><span class="skeleton" style="width: 5rem; height: 1rem"></span></div>
+      <div class="mt-2 skeleton" style="width: 60%; height: 2.25rem"></div>
+      <div class="mt-3 skeleton" style="width: 40%; height: 1rem"></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="accounts-heading">
+  <div class="section-heading">
+    <h2 id="accounts-heading">계좌</h2>
+    <span id="last-updated" class="text-xs text-[color:var(--color-muted)]"></span>
+  </div>
+
+  <ul id="accounts" class="row-list" aria-busy="true">
+    <li class="row-item"><div><div class="row-title skeleton" style="width: 60%; height: 1rem"></div><div class="row-sub skeleton mt-2" style="width: 40%; height: 0.75rem"></div></div><div class="row-right skeleton" style="width: 5rem; height: 1rem"></div></li>
+    <li class="row-item"><div><div class="row-title skeleton" style="width: 55%; height: 1rem"></div><div class="row-sub skeleton mt-2" style="width: 35%; height: 0.75rem"></div></div><div class="row-right skeleton" style="width: 5rem; height: 1rem"></div></li>
+  </ul>
+</section>
 {% endblock %}

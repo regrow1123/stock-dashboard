@@ -1,0 +1,13 @@
+{
+  "name": "stock-dashboard-web",
+  "private": true,
+  "description": "Frontend build tooling for the stock-dashboard web UI",
+  "scripts": {
+    "build:css": "tailwindcss -i web/styles.src.css -o web/static/styles.css --minify",
+    "watch:css": "tailwindcss -i web/styles.src.css -o web/static/styles.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.2.2",
+    "tailwindcss": "^4.2.2"
+  }
+}

@@ -1,3 +1,12 @@
+# --- CSS build stage (Tailwind v4 needs Node 20+) ---
+FROM node:20-alpine AS css
+WORKDIR /src
+COPY package.json ./
+RUN npm install --no-audit --no-fund
+COPY web ./web
+RUN npx tailwindcss -i web/styles.src.css -o web/static/styles.css --minify
+
+# --- runtime stage ---
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Asia/Seoul
@@ -16,6 +25,7 @@ RUN pip install --no-cache-dir -e .
 COPY app ./app
 COPY web ./web
 COPY seed ./seed
+COPY --from=css /src/web/static/styles.css ./web/static/styles.css
 
 RUN mkdir -p /app/data /home/appuser \
  && chown -R 1000:1000 /app/data /home/appuser

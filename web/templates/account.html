@@ -1,43 +1,125 @@
 {% extends "base.html" %}
 {% block title %}{{ account.name }}{% endblock %}
+{% block header_title %}{{ account.name }}{% endblock %}
+
 {% block content %}
-<h1>{{ account.name }} <span class="tag">{{ account.broker }}</span></h1>
-<div id="header-cards" class="totals"></div>
-
-<h2>종목 비중</h2>
-<div class="chart-wrap small"><canvas id="pie"></canvas></div>
-
-<h2>보유 종목</h2>
-<div class="table-wrap">
-  <table id="holdings"><thead>
-    <tr><th>종목</th><th>수량</th><th>평단</th><th>현재가</th><th>평가</th><th>비중</th><th>손익</th><th>수익률</th></tr>
-  </thead><tbody></tbody></table>
-</div>
-
-<h2>자산 추이 vs 벤치마크 (1y)</h2>
-<div class="chart-wrap"><canvas id="history"></canvas></div>
-
-<h2>실현손익 / 배당</h2>
-<div class="totals">
-  <div class="card">
-    <div class="kv"><span>실현손익</span><strong id="realized">—</strong></div>
+<section aria-labelledby="hero-heading" class="mt-1">
+  <h2 id="hero-heading" class="sr-only">{{ account.name }} 요약</h2>
+  <div class="mb-2 text-[color:var(--color-muted)] text-sm">
+    <span class="tag">{{ account.broker }}</span>
+    <span class="ml-1">{{ account.currency }}</span>
   </div>
-  <div class="card">
-    <div class="kv"><span>배당 누계</span><strong id="dividend">—</strong></div>
-  </div>
-</div>
 
-<h2>최근 매매</h2>
-<div class="table-wrap">
-  <table id="trades"><thead>
-    <tr><th>일자</th><th>종목</th><th>구분</th><th>수량</th><th>가격</th></tr>
-  </thead><tbody></tbody></table>
-</div>
+  <div id="hero" aria-live="polite" aria-busy="true" class="card card-body">
+    <div class="flex items-baseline justify-between gap-3">
+      <span class="label">평가</span>
+      <span id="hero-pill" class="skeleton" style="width: 4.5rem; height: 1.25rem"></span>
+    </div>
+    <div id="hero-value" class="hero-number mt-1 skeleton" style="height: 2.5rem; width: 70%"></div>
+    <div class="kv mt-3"><span>원가</span><strong id="hero-cost">—</strong></div>
+    <div class="kv mt-1"><span>평가손익</span><strong id="hero-pnl">—</strong></div>
+  </div>
+</section>
+
+<section aria-labelledby="history-heading">
+  <div class="section-heading">
+    <h2 id="history-heading">자산 추이 vs 벤치마크</h2>
+    <div class="chip-group" role="tablist" aria-label="기간 선택" id="range-tabs">
+      <button type="button" class="chip" role="tab" data-range="1M">1M</button>
+      <button type="button" class="chip" role="tab" data-range="3M">3M</button>
+      <button type="button" class="chip" role="tab" data-range="6M">6M</button>
+      <button type="button" class="chip" role="tab" data-range="1Y" aria-selected="true">1Y</button>
+    </div>
+  </div>
+  <div class="card card-body" aria-busy="true" id="history-wrap">
+    <canvas id="history" role="img" aria-labelledby="history-summary"></canvas>
+    <p id="history-summary" class="sr-only">자산 추이 차트를 불러오는 중입니다.</p>
+  </div>
+</section>
+
+<section aria-labelledby="weights-heading">
+  <div class="section-heading">
+    <h2 id="weights-heading">종목 비중</h2>
+  </div>
+  <div class="card card-body">
+    <div id="weights" class="weight-list" aria-busy="true">
+      <div class="skeleton" style="height: 1rem"></div>
+      <div class="skeleton" style="height: 1rem"></div>
+      <div class="skeleton" style="height: 1rem"></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="holdings-heading">
+  <div class="section-heading">
+    <h2 id="holdings-heading">보유 종목</h2>
+  </div>
+  <ul id="holdings-list" class="row-list md:hidden" aria-busy="true" aria-label="보유 종목 목록">
+    <li class="row-item"><div><div class="row-title skeleton" style="width:55%;height:1rem"></div><div class="row-sub skeleton mt-2" style="width:40%;height:.75rem"></div></div><div class="row-right skeleton" style="width:5rem;height:1rem"></div></li>
+    <li class="row-item"><div><div class="row-title skeleton" style="width:55%;height:1rem"></div><div class="row-sub skeleton mt-2" style="width:40%;height:.75rem"></div></div><div class="row-right skeleton" style="width:5rem;height:1rem"></div></li>
+  </ul>
+  <div class="table-wrap hidden md:block">
+    <table class="data" id="holdings-table">
+      <caption class="sr-only">보유 종목 상세 표</caption>
+      <thead>
+        <tr>
+          <th scope="col">종목</th>
+          <th scope="col">수량</th>
+          <th scope="col">평단</th>
+          <th scope="col">현재가</th>
+          <th scope="col">평가</th>
+          <th scope="col">비중</th>
+          <th scope="col">손익</th>
+          <th scope="col">수익률</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="realized-heading">
+  <div class="section-heading">
+    <h2 id="realized-heading">실현손익 / 배당</h2>
+  </div>
+  <div class="grid grid-cols-2 gap-3">
+    <div class="card card-body">
+      <div class="label">실현손익</div>
+      <strong id="realized" class="hero-number block mt-1" style="font-size: clamp(1.25rem, 4.5vw, 1.5rem)">—</strong>
+    </div>
+    <div class="card card-body">
+      <div class="label">배당 누계</div>
+      <strong id="dividend" class="hero-number block mt-1" style="font-size: clamp(1.25rem, 4.5vw, 1.5rem)">—</strong>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="trades-heading">
+  <div class="section-heading">
+    <h2 id="trades-heading">최근 매매</h2>
+  </div>
+  <ul id="trades-list" class="row-list md:hidden" aria-busy="true" aria-label="최근 매매 목록"></ul>
+  <div class="table-wrap hidden md:block">
+    <table class="data" id="trades-table">
+      <caption class="sr-only">최근 매매 내역</caption>
+      <thead>
+        <tr>
+          <th scope="col">일자</th>
+          <th scope="col">종목</th>
+          <th scope="col">구분</th>
+          <th scope="col">수량</th>
+          <th scope="col">가격</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
 {% endblock %}
+
 {% block scripts %}
 <script>
-const ACCOUNT_ID = {{ account.id | tojson }};
-const CURRENCY = {{ account.currency | tojson }};
+  window.ACCOUNT_ID = {{ account.id | tojson }};
+  window.ACCOUNT_CURRENCY = {{ account.currency | tojson }};
 </script>
-<script src="/static/app.js?v={{ asset_ver }}"></script>
 {% endblock %}

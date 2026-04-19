@@ -175,7 +175,7 @@ def account_dividends(account_id: str, db: Session = Depends(get_db)):
 
 
 from app.benchmarks import BENCHMARK_FOR_CURRENCY, rebase_series
-from app.metrics import fifo_realized_pnl
+from app.metrics import fifo_realized_pnl, twr_series
 from app.models import Benchmark as _Bench
 
 
@@ -229,6 +229,20 @@ def account_benchmark(
         by_date[s.date] = by_date.get(s.date, 0.0) + s.value
     port = sorted(by_date.items())
 
+    # Net cash flows per date from trades in the same window (buys = inflow,
+    # sells = outflow). Used to strip the purchase-day jump from the TWR curve.
+    flow_q = db.query(Trade).filter_by(account_id=account_id)
+    if port:
+        flow_q = flow_q.filter(Trade.executed_at >= port[0][0])
+    if to_date is not None:
+        flow_q = flow_q.filter(Trade.executed_at <= to_date)
+    flows_by_date: dict[date, float] = {}
+    for t in flow_q.all():
+        sign = 1.0 if t.side == "buy" else -1.0
+        flows_by_date[t.executed_at] = (
+            flows_by_date.get(t.executed_at, 0.0) + sign * t.quantity * t.price
+        )
+
     bench_q = db.query(_Bench).filter_by(ticker=bench_ticker)
     if from_date is not None:
         bench_q = bench_q.filter(_Bench.date >= from_date)
@@ -238,7 +252,7 @@ def account_benchmark(
     if port:
         start = port[0][0]
         bench = [(d, v) for d, v in bench if d >= start]
-    port_rebased = rebase_series(port)
+    port_rebased = twr_series(port, flows_by_date)
     bench_rebased = rebase_series(bench)
     bench_name = {"^KS11": "KOSPI", "^GSPC": "S&P 500"}.get(bench_ticker, bench_ticker)
     return {

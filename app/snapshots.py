@@ -36,7 +36,14 @@ def _quantities_on(
 def recompute_snapshots(
     db: Session, *, from_date: date, to_date: date, account_id: str | None = None
 ) -> int:
-    """Recompute snapshots(date in [from_date, to_date]) for the given account (or all)."""
+    """Recompute snapshots(date in [from_date, to_date]) for the given account (or all).
+
+    When a ticker has no historical price at a given date (e.g. a newly-listed
+    ETF held as a seed holding, before its first trading day), fall back to the
+    seed's avg_price so the position is carried at cost. This prevents an
+    artificial jump on the listing day; the real P&L from listing is attributed
+    as a normal market move on that day.
+    """
     accounts = (
         db.query(Account).filter(Account.id == account_id).all()
         if account_id
@@ -51,6 +58,11 @@ def recompute_snapshots(
         ).delete(synchronize_session=False)
         db.commit()
 
+        seeds = {
+            sh.ticker: sh
+            for sh in db.query(SeedHolding).filter_by(account_id=acc.id).all()
+        }
+
         for d in _iter_dates(from_date, to_date):
             tickers: set[str] = set()
             qty_map = _quantities_on(db, acc.id, tickers, d)
@@ -60,7 +72,11 @@ def recompute_snapshots(
                     continue
                 close = close_on_or_before(db, ticker, d)
                 if close is None:
-                    continue
+                    seed = seeds.get(ticker)
+                    if seed is not None and seed.avg_price > 0:
+                        close = seed.avg_price
+                    else:
+                        continue
                 db.add(
                     Snapshot(
                         date=d,

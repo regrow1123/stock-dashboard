@@ -10,5 +10,12 @@ data/*.db-*
 .ruff_cache/
 *.egg-info/
 
+# Frontend build
+node_modules/
+web/static/styles.css
+
+# Playwright MCP runtime artifacts
+.playwright-mcp/
+
 # Personal data — keep only the .example file in repo
 seed/initial_holdings.yaml
