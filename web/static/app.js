@@ -27,6 +27,13 @@
   const pctStr = (n) => (n >= 0 ? '+' : '') + (n * 100).toFixed(2) + '%';
   const pctInt = (n) => (n * 100).toFixed(1) + '%';
 
+  const monthLabel = (iso) => {
+    // iso = 'YYYY-MM-DD' -> '4월' (1Y range)
+    const [, m] = iso.split('-');
+    return `${parseInt(m, 10)}월`;
+  };
+  const shortDate = (iso) => iso.slice(2, 7); // 'YY-MM'
+
   const timeLabel = (date = new Date()) =>
     date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 
@@ -415,6 +422,9 @@
     const days = RANGE_DAYS[range] || 366;
     const from = new Date(Date.now() - days * 86400 * 1000).toISOString().slice(0, 10);
     const wrap = document.getElementById('history-wrap');
+    const titleEl = document.getElementById('history-title');
+    const heroEl = document.getElementById('history-hero');
+    const benchStatEl = document.getElementById('history-bench-stat');
     wrap.setAttribute('aria-busy', 'true');
 
     let bench;
@@ -428,6 +438,28 @@
       return;
     }
     if (seq !== historyReqSeq) return; // stale result from an older tab click
+
+    const portEndVal = bench.portfolio[bench.portfolio.length - 1]?.value;
+    const benchEndVal = bench.benchmark[bench.benchmark.length - 1]?.value;
+    const portReturn = portEndVal != null ? portEndVal - 1 : null;
+    const benchReturn = benchEndVal != null ? benchEndVal - 1 : null;
+    const benchName = bench.benchmark_name || bench.benchmark_ticker || '벤치마크';
+
+    if (titleEl) titleEl.textContent = `자산 추이 · vs ${benchName}`;
+    if (heroEl) {
+      if (portReturn != null) {
+        heroEl.textContent = pctStr(portReturn);
+        heroEl.className = `chart-hero ${portReturn >= 0 ? 'pos' : 'neg'}`;
+      } else {
+        heroEl.textContent = '—';
+        heroEl.className = 'chart-hero';
+      }
+    }
+    if (benchStatEl) {
+      benchStatEl.textContent = benchReturn != null
+        ? `${benchName} ${pctStr(benchReturn)}`
+        : `${benchName} —`;
+    }
 
     const allDates = Array.from(new Set([
       ...bench.portfolio.map((p) => p.date),
@@ -443,9 +475,20 @@
     if (existing) { existing.destroy(); chartRegistry.delete(existing); }
     const ctx = canvas.getContext('2d');
 
-    const accentColor = colorOf('--color-accent', '#2563eb');
-    const mutedColor  = colorOf('--color-muted', '#94a3b8');
-    const fillColor = hexToRgba(accentColor, 0.14);
+    const lineColor      = colorOf('--chart-line', '#1c1917');
+    const lineBenchColor = colorOf('--chart-line-bench', '#a8a29e');
+
+    // area gradient: built per-render via scriptable so it sizes correctly
+    // even when canvas.height is 0 at chart-construction time.
+    const portFill = (ctx) => {
+      const { chart } = ctx;
+      const area = chart.chartArea;
+      if (!area) return hexToRgba(lineColor, 0.08); // first paint fallback
+      const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+      g.addColorStop(0, hexToRgba(lineColor, 0.15));
+      g.addColorStop(1, hexToRgba(lineColor, 0));
+      return g;
+    };
 
     histChart = new Chart(ctx, {
       type: 'line',
@@ -456,22 +499,25 @@
             label: '포트폴리오',
             data: allDates.map((d) => portMap[d] ?? null),
             spanGaps: true,
-            borderColor: accentColor,
-            backgroundColor: fillColor,
+            borderColor: lineColor,
+            backgroundColor: portFill,
             fill: true,
             pointRadius: 0,
-            borderWidth: 2,
+            pointHoverRadius: 0,
+            borderWidth: 1.5,
             tension: 0.18,
           },
           {
-            label: bench.benchmark_name || bench.benchmark_ticker,
+            label: benchName,
             data: allDates.map((d) => benchMap[d] ?? null),
             spanGaps: true,
-            borderColor: mutedColor,
-            borderDash: [4, 4],
+            borderColor: lineBenchColor,
+            borderDash: [2, 3],
             pointRadius: 0,
-            borderWidth: 1.5,
+            pointHoverRadius: 0,
+            borderWidth: 1,
             tension: 0.18,
+            fill: false,
           },
         ],
       },
@@ -482,50 +528,35 @@
         interaction: { intersect: false, mode: 'index' },
         animation: reducedMotion.matches ? false : { duration: 220 },
         plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { boxWidth: 14, boxHeight: 14, padding: 12, font: { size: 12 } },
-          },
-          tooltip: {
-            callbacks: {
-              // series are rebased to 1.0 (TWR for portfolio, price-rebased for benchmark)
-              label: (c) => {
-                const delta = c.parsed.y - 1;
-                const sign = delta >= 0 ? '+' : '';
-                return `${c.dataset.label}: ${sign}${(delta * 100).toFixed(2)}%`;
-              },
-            },
-          },
+          legend: { display: false },
+          tooltip: { enabled: false }, // we render our own DOM tooltip in Task 7
         },
         scales: {
-          x: {
-            ticks: {
-              maxTicksLimit: narrow.matches ? 4 : 7,
-              autoSkip: true,
-              font: { size: 11 },
-              callback(value) {
-                const label = this.getLabelForValue(value);
-                return typeof label === 'string' ? label.slice(2, 7) : label;
-              },
-            },
-            grid: { display: false },
-          },
-          y: {
-            ticks: { font: { size: 11 } },
-            grid: { color: colorOf('--color-border', 'rgba(148,163,184,0.2)') },
-          },
+          x: { display: false },
+          y: { display: false },
         },
+        layout: { padding: { top: 8, right: 4, bottom: 0, left: 4 } },
       },
     });
     chartRegistry.add(histChart);
 
+    // x-label strip: 4 evenly spaced points
+    const xWrap = document.getElementById('history-xlabels');
+    if (xWrap) {
+      const fmt = currentRange === '1Y' ? monthLabel : shortDate;
+      const n = allDates.length;
+      if (n === 0) {
+        xWrap.innerHTML = '';
+      } else {
+        const picks = [0, Math.floor(n / 3), Math.floor((2 * n) / 3), n - 1]
+          .filter((i, idx, arr) => arr.indexOf(i) === idx);
+        xWrap.innerHTML = picks.map((i) => `<span>${fmt(allDates[i])}</span>`).join('');
+      }
+    }
+
     // a11y summary — series are TWR-rebased to 1.0, so (last - 1) is the cumulative return.
-    const port = bench.portfolio;
-    const b = bench.benchmark;
-    const portEnd = port[port.length - 1]?.value;
-    const benchEnd = b[b.length - 1]?.value;
-    const summary = portEnd != null
-      ? `${range} 구간 수익률 ${pctStr(portEnd - 1)}. 벤치마크 ${bench.benchmark_name || bench.benchmark_ticker} ${benchEnd != null ? pctStr(benchEnd - 1) : '—'}.`
+    const summary = portReturn != null
+      ? `${range} TWR ${pctStr(portReturn)}. 벤치마크 ${benchName} ${benchReturn != null ? pctStr(benchReturn) : '—'}.`
       : '데이터 없음';
     document.getElementById('history-summary').textContent = summary;
     wrap.setAttribute('aria-busy', 'false');
