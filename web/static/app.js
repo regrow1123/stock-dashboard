@@ -552,13 +552,12 @@
     ].filter((v) => v != null);
     const dataMin = allValues.length ? Math.min(1, ...allValues) : 0.95;
     const dataMax = allValues.length ? Math.max(1, ...allValues) : 1.05;
-    // Tight-fit bounds with small breathing room. Step / explicit ticks are
-    // computed below in afterBuildTicks so we always get exactly 4
-    // evenly-spaced gridlines no matter the range — labels won't all be
-    // round %-values but the chart never wastes vertical space.
-    const yPad = 0.03 * (dataMax - dataMin);
-    const yMin = dataMin - yPad;
-    const yMax = dataMax + yPad;
+    // 4 evenly-spaced gridlines whose labels are all multiples of 10%.
+    // yMin snaps DOWN to a 10%-grid line; step is the smallest 10%-multiple
+    // that lets 3 intervals cover the data; yMax = yMin + 3*step.
+    const yMin = Math.floor(dataMin * 10) / 10;
+    const yStep = Math.max(0.1, Math.ceil((dataMax - yMin) / 3 * 10) / 10);
+    const yMax = yMin + 3 * yStep;
 
     if (titleEl) titleEl.textContent = `자산 추이 · vs ${benchName}`;
     if (heroEl) {
@@ -685,17 +684,11 @@
               lineWidth: (ctx) => (ctx.tick && Math.abs(ctx.tick.value - 1) < 0.005 ? 1 : 0.5),
               drawTicks: false,
             },
-            // exactly 4 evenly-spaced ticks across the (tight) y-range
-            afterBuildTicks: (axis) => {
-              const lo = axis.min;
-              const hi = axis.max;
-              axis.ticks = [0, 1, 2, 3].map((i) => ({ value: lo + (hi - lo) * (i / 3) }));
-            },
             ticks: {
               color: colorOf('--chart-axis', '#a8a29e'),
               font: { family: cssVar('--font-mono') || 'ui-monospace', size: 10 },
               padding: 4,
-              autoSkip: false,
+              stepSize: yStep,
               callback(v) {
                 const d = v - 1;
                 return `${d >= 0 ? '+' : ''}${(d * 100).toFixed(0)}%`;
