@@ -9,6 +9,7 @@ from app.models import (
     Account, Benchmark, Dividend, Instrument, LivePrice, SeedHolding, Snapshot, Trade,
 )
 from app.prices import close_on_or_before
+from app.sentiment import cnn_fg
 
 router = APIRouter(prefix="/api")
 
@@ -129,8 +130,7 @@ MARKET_TICKERS = [
     ("^KQ11",   "KOSDAQ",  "kr"),
     ("^GSPC",   "S&P",     "us"),
     ("^IXIC",   "NASDAQ",  "us"),
-    ("^VIX",    "VIX",     "us"),
-    ("KRW=X",   "USD/KRW", "fx"),
+    ("KRW=X",   "USD/KRW", "us"),
     ("BTC-USD", "BTC",     "alt"),
     ("CL=F",    "WTI",     "alt"),
     ("GC=F",    "Gold",    "alt"),
@@ -163,6 +163,11 @@ def markets(db: Session = Depends(get_db)):
             "as_of": latest.date.isoformat(),
         })
     return out
+
+
+@router.get("/sentiment")
+def sentiment(db: Session = Depends(get_db)):
+    return {"fear_and_greed": cnn_fg(db)}
 
 
 @router.get("/summary")

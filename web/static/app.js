@@ -229,6 +229,7 @@
     const [s] = await Promise.all([
       getJSON('/api/summary'),
       renderMarketTicker(),
+      renderSentiment(),
     ]);
 
     renderAccountsList(s.accounts || []);
@@ -236,6 +237,56 @@
     const now = timeLabel();
     const u = document.getElementById('last-updated');
     if (u) u.textContent = `${now} 갱신`;
+  }
+
+  function fgRatingKo(rating) {
+    return {
+      'extreme fear': '극단적 공포',
+      'fear': '공포',
+      'neutral': '중립',
+      'greed': '탐욕',
+      'extreme greed': '극단적 탐욕',
+    }[rating?.toLowerCase()] || rating || '';
+  }
+
+  async function renderSentiment() {
+    const host = document.getElementById('sentiment');
+    if (!host) return;
+    let data;
+    try {
+      data = await getJSON('/api/sentiment');
+    } catch (e) {
+      host.innerHTML = '';
+      return;
+    }
+    const fg = data.fear_and_greed;
+    if (!fg || fg.score == null) {
+      host.innerHTML = '';
+      return;
+    }
+    const score = Math.round(fg.score);
+    const prev = fg.previous_close != null ? Math.round(fg.previous_close) : null;
+    const w = fg.previous_1_week != null ? Math.round(fg.previous_1_week) : null;
+    const m = fg.previous_1_month != null ? Math.round(fg.previous_1_month) : null;
+    const rating = fgRatingKo(fg.rating);
+    host.innerHTML = `
+      <div class="sent-card">
+        <div class="sent-head">
+          <span class="sent-lbl">CNN Fear &amp; Greed</span>
+          <span class="sent-score">${score}<span class="sent-rating"> · ${escapeHTML(rating)}</span></span>
+        </div>
+        <div class="sent-gauge" aria-label="${score} / 100">
+          <div class="sent-track"></div>
+          ${prev != null ? `<div class="sent-prev" style="left:${prev}%" title="어제 ${prev}"></div>` : ''}
+          <div class="sent-marker" style="left:${score}%"></div>
+        </div>
+        <div class="sent-meta">
+          <span>어제 ${prev ?? '—'}</span>
+          <span>1주 ${w ?? '—'}</span>
+          <span>1달 ${m ?? '—'}</span>
+        </div>
+      </div>
+    `;
   }
 
   async function renderMarketTicker() {
@@ -252,7 +303,7 @@
         const pct = (Math.abs(r.change_pct) * 100).toFixed(2);
         return `<span class="mt-item"><span class="mt-lbl">${escapeHTML(r.label)}</span><span class="mt-val ${cls}">${arrow} ${pct}%</span></span>`;
       };
-      const groups = ['kr', 'us', 'fx', 'alt'];
+      const groups = ['kr', 'us', 'alt'];
       host.innerHTML = groups.map((g) => {
         const items = rows.filter((r) => r.group === g).map(itemHtml).join('');
         return items ? `<div class="mt-row">${items}</div>` : '';
