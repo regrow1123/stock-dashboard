@@ -129,7 +129,6 @@
 
     Alpine.data('appShell', () => ({
       scrolled: false,
-      refreshing: false,
       _onScroll: null,
       init() {
         this._onScroll = () => { this.scrolled = window.scrollY > 8; };
@@ -138,18 +137,6 @@
       },
       destroy() {
         window.removeEventListener('scroll', this._onScroll);
-      },
-      async refreshNow() {
-        if (this.refreshing) return;
-        this.refreshing = true;
-        try {
-          if (typeof window.pageReload === 'function') await window.pageReload();
-        } catch (e) {
-          console.error(e);
-          Alpine.store('toast').push('새로고침 실패', 'error');
-        } finally {
-          this.refreshing = false;
-        }
       },
     }));
   });

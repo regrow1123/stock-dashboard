@@ -402,6 +402,13 @@
     align-items: center;
     gap: 0.5rem;
     min-height: 52px;
+    position: relative;
+  }
+  .icon-btn-back {
+    position: absolute;
+    left: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
   }
   .icon-btn {
     appearance: none;
@@ -431,6 +438,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: center;
   }
 
   /* market ticker subline under the header title (overview page only) */
