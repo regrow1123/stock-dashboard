@@ -266,24 +266,21 @@
       return;
     }
     el.innerHTML = accounts.map((a) => {
-      const sign = a.pct_return >= 0 ? 'pos' : 'neg';
-      const pill = a.pct_return >= 0 ? 'pill-pos' : 'pill-neg';
+      const dc = a.day_change_pct;
+      const dcPill = dc == null ? 'pill-muted' : dc >= 0 ? 'pill-pos' : 'pill-neg';
+      const dcText = dc == null ? '—' : pctStr(dc);
       return `
         <li>
           <a class="row-item card-tap" href="/accounts/${a.account_id}"
-             aria-label="${escapeHTML(a.name)} 상세 보기, 평가 ${fmtMoney(a.value, a.currency)}, 수익률 ${pctStr(a.pct_return)}">
+             aria-label="${escapeHTML(a.name)} 상세 보기, 오늘 ${dcText}">
             <div>
               <div class="row-title">${escapeHTML(a.name)}
                 <span class="tag">${escapeHTML(a.broker)}</span>
               </div>
-              <div class="row-sub">
-                <span class="pill ${pill}">${pctStr(a.pct_return)}</span>
-                <span class="ml-2">${signedMoney(a.pnl, a.currency)}</span>
-              </div>
+              <div class="row-sub">${a.currency}</div>
             </div>
             <div class="row-right">
-              ${fmtMoney(a.value, a.currency)}
-              <div class="row-sub ${sign}">${a.currency}</div>
+              <span class="pill ${dcPill}">${dcText}</span>
             </div>
           </a>
         </li>`;

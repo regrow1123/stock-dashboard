@@ -125,7 +125,10 @@ def account_weights(account_id: str, db: Session = Depends(get_db)):
 
 MARKET_TICKERS = [
     ("^KS11", "KOSPI"),
+    ("^KQ11", "KOSDAQ"),
     ("^GSPC", "S&P"),
+    ("^IXIC", "NASDAQ"),
+    ("KRW=X", "USD/KRW"),
 ]
 
 
@@ -164,10 +167,18 @@ def summary(db: Session = Depends(get_db)):
         rows = _holdings_for(db, a.id)
         value = sum(r["value"] for r in rows)
         cost = sum(r["cost"] for r in rows)
+        # account-level daily % change: (today_value − yesterday_value) / yesterday
+        prev_value = sum(
+            r["quantity"] * r["prev_close"]
+            for r in rows
+            if r["prev_close"] is not None
+        )
+        day_change = (value - prev_value) / prev_value if prev_value > 0 else None
         by_account.append({
             "account_id": a.id, "name": a.name, "broker": a.broker,
             "currency": a.currency, "value": value, "cost": cost,
             "pnl": value - cost, "pct_return": pct_return(cost, value),
+            "day_change_pct": day_change,
         })
         c = by_currency.setdefault(a.currency, {"value": 0.0, "cost": 0.0})
         c["value"] += value

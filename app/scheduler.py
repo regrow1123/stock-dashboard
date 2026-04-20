@@ -40,11 +40,12 @@ def benchmarks_job(session_factory) -> None:
     try:
         today = date.today()
         start = today - timedelta(days=400)
-        currencies = {a.currency for a in db.query(Account).all()}
-        for c in currencies:
-            tk = BENCHMARK_FOR_CURRENCY.get(c)
-            if tk:
-                backfill_benchmark(db, ticker=tk, start=start, end=today + timedelta(days=1))
+        from app.api import MARKET_TICKERS
+        tickers = {BENCHMARK_FOR_CURRENCY.get(a.currency) for a in db.query(Account).all()}
+        tickers.discard(None)
+        tickers |= {tk for tk, _ in MARKET_TICKERS}
+        for tk in tickers:
+            backfill_benchmark(db, ticker=tk, start=start, end=today + timedelta(days=1))
     finally:
         if hasattr(db, "close"):
             db.close()
