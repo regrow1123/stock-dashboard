@@ -542,6 +542,20 @@
     const benchReturn = benchEndVal != null ? benchEndVal - 1 : null;
     const benchName = bench.benchmark_name || bench.benchmark_ticker || '벤치마크';
 
+    // y-axis bounds: tight fit to the data union so we don't waste the
+    // top/bottom of the chart on Chart.js auto-padding (otherwise the
+    // visible scale stretches to e.g. -100%..+200% when one series is
+    // far above 1.0).
+    const allValues = [
+      ...bench.portfolio.map((p) => p.value),
+      ...bench.benchmark.map((p) => p.value),
+    ].filter((v) => v != null);
+    const dataMin = allValues.length ? Math.min(1, ...allValues) : 0.95;
+    const dataMax = allValues.length ? Math.max(1, ...allValues) : 1.05;
+    const padFrac = 0.04 * (dataMax - dataMin);
+    const yMin = dataMin - padFrac;
+    const yMax = dataMax + padFrac;
+
     if (titleEl) titleEl.textContent = `자산 추이 · vs ${benchName}`;
     if (heroEl) {
       if (portReturn != null) {
@@ -600,12 +614,13 @@
             spanGaps: true,
             borderColor: lineColor,
             backgroundColor: portFill,
-            fill: true,
+            // fill from line to the 1.0 (= 0% return) baseline, not the
+            // chart bottom — keeps the shaded area honest about loss/gain.
+            fill: { target: { value: 1 } },
             pointRadius: 0,
             pointHoverRadius: 0,
             borderWidth: 1.5,
             tension: 0.18,
-            yAxisID: 'y',
           },
           {
             label: benchName,
@@ -618,7 +633,6 @@
             borderWidth: 1,
             tension: 0.18,
             fill: false,
-            yAxisID: 'y2',
           },
         ],
       },
@@ -643,11 +657,26 @@
         },
         scales: {
           x: { display: false },
-          // dual y-axes: portfolio and benchmark scaled independently so
-          // both lines fit even when one dramatically out-/under-performs.
-          // Both rebased to 1.0; "above 1.0 = positive return" still holds.
-          y: { display: false, position: 'left' },
-          y2: { display: false, position: 'right' },
+          // single y-axis, TWR rebased to 1.0. Labels rendered as ±% so
+          // the reader can gauge absolute performance without a baseline.
+          y: {
+            display: true,
+            position: 'right',
+            min: yMin,
+            max: yMax,
+            border: { display: false },
+            grid: { color: colorOf('--chart-grid', '#e8e6df'), drawTicks: false },
+            ticks: {
+              color: colorOf('--chart-axis', '#a8a29e'),
+              font: { family: cssVar('--font-mono') || 'ui-monospace', size: 10 },
+              padding: 4,
+              maxTicksLimit: 4,
+              callback(v) {
+                const d = v - 1;
+                return `${d >= 0 ? '+' : ''}${(d * 100).toFixed(0)}%`;
+              },
+            },
+          },
         },
         layout: { padding: { top: 8, right: 4, bottom: 0, left: 4 } },
       },
