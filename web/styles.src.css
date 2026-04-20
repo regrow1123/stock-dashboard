@@ -441,11 +441,14 @@
   }
   .market-ticker-inner {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem 0.875rem;
+    flex-direction: column;
+    gap: 0.25rem;
     font-family: var(--font-mono);
     font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
+  }
+  .market-ticker .mt-row {
+    display: flex; flex-wrap: wrap; gap: 0.25rem 1rem;
   }
   .market-ticker .mt-item {
     display: inline-flex; gap: 0.375rem; align-items: baseline;

@@ -243,7 +243,7 @@
     if (!host) return;
     try {
       const rows = await getJSON('/api/markets');
-      host.innerHTML = rows.map((r) => {
+      const itemHtml = (r) => {
         if (r.change_pct == null) {
           return `<span class="mt-item"><span class="mt-lbl">${escapeHTML(r.label)}</span><span class="mt-val muted">—</span></span>`;
         }
@@ -251,6 +251,11 @@
         const arrow = r.change_pct >= 0 ? '▲' : '▼';
         const pct = (Math.abs(r.change_pct) * 100).toFixed(2);
         return `<span class="mt-item"><span class="mt-lbl">${escapeHTML(r.label)}</span><span class="mt-val ${cls}">${arrow} ${pct}%</span></span>`;
+      };
+      const groups = ['kr', 'us', 'fx'];
+      host.innerHTML = groups.map((g) => {
+        const items = rows.filter((r) => r.group === g).map(itemHtml).join('');
+        return items ? `<div class="mt-row">${items}</div>` : '';
       }).join('');
     } catch (e) {
       host.innerHTML = '';

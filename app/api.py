@@ -124,18 +124,19 @@ def account_weights(account_id: str, db: Session = Depends(get_db)):
 
 
 MARKET_TICKERS = [
-    ("^KS11", "KOSPI"),
-    ("^KQ11", "KOSDAQ"),
-    ("^GSPC", "S&P"),
-    ("^IXIC", "NASDAQ"),
-    ("KRW=X", "USD/KRW"),
+    # (ticker, label, group)
+    ("^KS11", "KOSPI",   "kr"),
+    ("^KQ11", "KOSDAQ",  "kr"),
+    ("^GSPC", "S&P",     "us"),
+    ("^IXIC", "NASDAQ",  "us"),
+    ("KRW=X", "USD/KRW", "fx"),
 ]
 
 
 @router.get("/markets")
 def markets(db: Session = Depends(get_db)):
     out = []
-    for tk, label in MARKET_TICKERS:
+    for tk, label, group in MARKET_TICKERS:
         rows = (
             db.query(Benchmark)
             .filter(Benchmark.ticker == tk)
@@ -144,13 +145,15 @@ def markets(db: Session = Depends(get_db)):
             .all()
         )
         if len(rows) < 2:
-            out.append({"ticker": tk, "label": label, "close": None, "change_pct": None})
+            out.append({"ticker": tk, "label": label, "group": group,
+                        "close": None, "change_pct": None})
             continue
         latest, prev = rows[0], rows[1]
         change = (latest.close - prev.close) / prev.close if prev.close else None
         out.append({
             "ticker": tk,
             "label": label,
+            "group": group,
             "close": float(latest.close),
             "change_pct": change,
             "as_of": latest.date.isoformat(),
