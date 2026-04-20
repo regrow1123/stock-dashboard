@@ -27,6 +27,13 @@
   const pctStr = (n) => (n >= 0 ? '+' : '') + (n * 100).toFixed(2) + '%';
   const pctInt = (n) => (n * 100).toFixed(1) + '%';
 
+  const monthLabel = (iso) => {
+    // iso = 'YYYY-MM-DD' -> '4월' (1Y range)
+    const [, m] = iso.split('-');
+    return `${parseInt(m, 10)}월`;
+  };
+  const shortDate = (iso) => iso.slice(2, 7); // 'YY-MM'
+
   const timeLabel = (date = new Date()) =>
     date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 
@@ -44,6 +51,64 @@
     const n = parseInt(h, 16);
     return `rgba(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`;
   }
+
+  // Chart.js plugin: draws an idle marker at the last portfolio point and
+  // a vertical crosshair when a tooltip is active.
+  const chartOrnamentsPlugin = {
+    id: 'ornaments',
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea, scales, tooltip } = chart;
+      const ds = chart.data.datasets[0];
+      if (!ds || !ds.data || !ds.data.length) return;
+
+      const markerColor = colorOf('--chart-marker', '#1c1917');
+      const axisColor   = colorOf('--chart-axis', '#a8a29e');
+
+      const isHovering = tooltip && tooltip.opacity !== 0 && tooltip.dataPoints?.length;
+
+      if (isHovering) {
+        const x = tooltip.caretX;
+        ctx.save();
+        ctx.strokeStyle = axisColor;
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // dots at the two intersected datasets
+        tooltip.dataPoints.forEach((dp, i) => {
+          const isPort = dp.datasetIndex === 0;
+          ctx.beginPath();
+          ctx.arc(dp.element.x, dp.element.y, isPort ? 3.5 : 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = isPort ? markerColor : axisColor;
+          ctx.strokeStyle = colorOf('--chart-card-bg', '#ffffff');
+          ctx.lineWidth = isPort ? 1.5 : 1;
+          ctx.fill();
+          ctx.stroke();
+        });
+        ctx.restore();
+        return;
+      }
+
+      // idle: small dot at last non-null portfolio point
+      let lastIdx = -1;
+      for (let i = ds.data.length - 1; i >= 0; i--) {
+        if (ds.data[i] != null) { lastIdx = i; break; }
+      }
+      if (lastIdx < 0) return;
+      const x = scales.x.getPixelForValue(lastIdx);
+      const y = scales.y.getPixelForValue(ds.data[lastIdx]);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = markerColor;
+      ctx.fill();
+      ctx.restore();
+    },
+  };
 
   // ---------- Alpine wiring ----------
 
@@ -95,6 +160,45 @@
     return String(s).replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     })[c]);
+  }
+
+  // External Chart.js tooltip — renders into a single .chart-tooltip DOM
+  // element appended once into the .chart-canvas-wrap container.
+  function externalTooltip(context) {
+    const { chart, tooltip } = context;
+    const wrap = chart.canvas.parentNode;
+    if (!wrap) return;
+    let el = wrap.querySelector('.chart-tooltip');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'chart-tooltip';
+      wrap.appendChild(el);
+    }
+    if (tooltip.opacity === 0) {
+      el.classList.remove('is-visible');
+      return;
+    }
+    const dp = tooltip.dataPoints || [];
+    if (!dp.length) return;
+    const date = tooltip.title?.[0] || '';
+    // both datasets are TWR-rebased to 1.0
+    const rows = dp.map((p) => {
+      const delta = p.parsed.y - 1;
+      const sign = delta >= 0 ? '+' : '';
+      const cls = delta >= 0 ? 'pos' : 'neg';
+      const key = p.datasetIndex === 0 ? 'PORT' : 'BMK';
+      return `<div class="tt-row">
+      <span class="tt-key">${key}</span>
+      <span class="tt-val ${cls}">${sign}${(delta * 100).toFixed(2)}%</span>
+    </div>`;
+    }).join('');
+    el.innerHTML = `<div class="tt-date">${date}</div>${rows}`;
+
+    const left = tooltip.caretX;
+    const top = tooltip.caretY;
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.classList.add('is-visible');
   }
 
   // ---------- Chart.js defaults ----------
@@ -415,6 +519,9 @@
     const days = RANGE_DAYS[range] || 366;
     const from = new Date(Date.now() - days * 86400 * 1000).toISOString().slice(0, 10);
     const wrap = document.getElementById('history-wrap');
+    const titleEl = document.getElementById('history-title');
+    const heroEl = document.getElementById('history-hero');
+    const benchStatEl = document.getElementById('history-bench-stat');
     wrap.setAttribute('aria-busy', 'true');
 
     let bench;
@@ -429,6 +536,47 @@
     }
     if (seq !== historyReqSeq) return; // stale result from an older tab click
 
+    const portEndVal = bench.portfolio[bench.portfolio.length - 1]?.value;
+    const benchEndVal = bench.benchmark[bench.benchmark.length - 1]?.value;
+    const portReturn = portEndVal != null ? portEndVal - 1 : null;
+    const benchReturn = benchEndVal != null ? benchEndVal - 1 : null;
+    const benchName = bench.benchmark_name || bench.benchmark_ticker || '벤치마크';
+
+    // y-axis bounds: snap to nice step intervals so horizontal gridlines
+    // land at clean %-values (e.g. 0/25/50/75 instead of jagged auto-picks)
+    // and tight-fit so we don't waste the canvas on Chart.js's default
+    // -100%..+200% rounding when one series is far above 1.0.
+    const allValues = [
+      ...bench.portfolio.map((p) => p.value),
+      ...bench.benchmark.map((p) => p.value),
+    ].filter((v) => v != null);
+    const dataMin = allValues.length ? Math.min(1, ...allValues) : 0.95;
+    const dataMax = allValues.length ? Math.max(1, ...allValues) : 1.05;
+    const yRange = dataMax - dataMin;
+    const yStep = yRange > 1.0  ? 0.5
+                : yRange > 0.5  ? 0.25
+                : yRange > 0.2  ? 0.1
+                : yRange > 0.1  ? 0.05
+                :                 0.02;
+    const yMin = Math.floor(dataMin / yStep) * yStep;
+    const yMax = Math.ceil(dataMax / yStep) * yStep;
+
+    if (titleEl) titleEl.textContent = `자산 추이 · vs ${benchName}`;
+    if (heroEl) {
+      if (portReturn != null) {
+        heroEl.textContent = pctStr(portReturn);
+        heroEl.className = `chart-hero ${portReturn >= 0 ? 'pos' : 'neg'}`;
+      } else {
+        heroEl.textContent = '—';
+        heroEl.className = 'chart-hero';
+      }
+    }
+    if (benchStatEl) {
+      benchStatEl.textContent = benchReturn != null
+        ? `${benchName} ${pctStr(benchReturn)}`
+        : `${benchName} —`;
+    }
+
     const allDates = Array.from(new Set([
       ...bench.portfolio.map((p) => p.date),
       ...bench.benchmark.map((p) => p.date),
@@ -441,11 +589,31 @@
     // look up the live instance directly rather than trusting a stale `histChart` var.
     const existing = window.Chart?.getChart?.(canvas);
     if (existing) { existing.destroy(); chartRegistry.delete(existing); }
+    // clear any stale external-tooltip from the previous chart instance
+    canvas.parentNode?.querySelector('.chart-tooltip')?.classList.remove('is-visible');
     const ctx = canvas.getContext('2d');
 
-    const accentColor = colorOf('--color-accent', '#2563eb');
-    const mutedColor  = colorOf('--color-muted', '#94a3b8');
-    const fillColor = hexToRgba(accentColor, 0.14);
+    const lineColor      = colorOf('--chart-line', '#1c1917');
+    const lineBenchColor = colorOf('--chart-line-bench', '#a8a29e');
+
+    // Dark mode: keep stroke widths the same as light, but slightly bump
+    // the area fill alpha so the gradient still reads on near-black bg.
+    const isDark = darkMq.matches;
+    const portWidth  = 1.5;
+    const benchWidth = 1;
+    const fillAlpha  = isDark ? 0.22 : 0.15;
+
+    // area gradient: built per-render via scriptable so it sizes correctly
+    // even when canvas.height is 0 at chart-construction time.
+    const portFill = (ctx) => {
+      const { chart } = ctx;
+      const area = chart.chartArea;
+      if (!area) return hexToRgba(lineColor, fillAlpha * 0.55); // first paint fallback
+      const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+      g.addColorStop(0, hexToRgba(lineColor, fillAlpha));
+      g.addColorStop(1, hexToRgba(lineColor, 0));
+      return g;
+    };
 
     histChart = new Chart(ctx, {
       type: 'line',
@@ -456,76 +624,102 @@
             label: '포트폴리오',
             data: allDates.map((d) => portMap[d] ?? null),
             spanGaps: true,
-            borderColor: accentColor,
-            backgroundColor: fillColor,
-            fill: true,
+            borderColor: lineColor,
+            backgroundColor: portFill,
+            // fill from line to the 1.0 (= 0% return) baseline, not the
+            // chart bottom — keeps the shaded area honest about loss/gain.
+            fill: { target: { value: 1 } },
             pointRadius: 0,
-            borderWidth: 2,
+            pointHoverRadius: 0,
+            borderWidth: portWidth,
             tension: 0.18,
           },
           {
-            label: bench.benchmark_name || bench.benchmark_ticker,
+            label: benchName,
             data: allDates.map((d) => benchMap[d] ?? null),
             spanGaps: true,
-            borderColor: mutedColor,
-            borderDash: [4, 4],
+            borderColor: lineBenchColor,
+            borderDash: [2, 3],
             pointRadius: 0,
-            borderWidth: 1.5,
+            pointHoverRadius: 0,
+            borderWidth: benchWidth,
             tension: 0.18,
+            fill: false,
           },
         ],
       },
+      plugins: [chartOrnamentsPlugin],
       options: {
         responsive: true,
         maintainAspectRatio: true,
         aspectRatio: narrow.matches ? 1.3 : 2.4,
         interaction: { intersect: false, mode: 'index' },
         animation: reducedMotion.matches ? false : { duration: 220 },
+        // color-property animations interpolate strings → can't handle CanvasGradient
+        // returned by the scriptable portFill; disable to avoid tick crashes.
+        animations: { colors: false },
         plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { boxWidth: 14, boxHeight: 14, padding: 12, font: { size: 12 } },
-          },
+          legend: { display: false },
           tooltip: {
-            callbacks: {
-              // series are rebased to 1.0 (TWR for portfolio, price-rebased for benchmark)
-              label: (c) => {
-                const delta = c.parsed.y - 1;
-                const sign = delta >= 0 ? '+' : '';
-                return `${c.dataset.label}: ${sign}${(delta * 100).toFixed(2)}%`;
-              },
-            },
+            enabled: false,
+            external: externalTooltip,
+            mode: 'index',
+            intersect: false,
           },
         },
         scales: {
-          x: {
+          x: { display: false },
+          // single y-axis, TWR rebased to 1.0. Labels rendered as ±% so
+          // the reader can gauge absolute performance without a baseline.
+          y: {
+            display: true,
+            position: 'right',
+            min: yMin,
+            max: yMax,
+            border: { display: false },
+            grid: {
+              // 0%-baseline (TWR = 1.0) gets a slightly stronger line so the
+              // reader can quickly see gain/loss without reading the labels.
+              color: (ctx) => (ctx.tick && Math.abs(ctx.tick.value - 1) < 1e-9
+                ? colorOf('--chart-card-border', '#e8e6df')
+                : colorOf('--chart-grid', '#e8e6df')),
+              lineWidth: (ctx) => (ctx.tick && Math.abs(ctx.tick.value - 1) < 1e-9 ? 1 : 0.5),
+              drawTicks: false,
+            },
             ticks: {
-              maxTicksLimit: narrow.matches ? 4 : 7,
-              autoSkip: true,
-              font: { size: 11 },
-              callback(value) {
-                const label = this.getLabelForValue(value);
-                return typeof label === 'string' ? label.slice(2, 7) : label;
+              color: colorOf('--chart-axis', '#a8a29e'),
+              font: { family: cssVar('--font-mono') || 'ui-monospace', size: 10 },
+              padding: 4,
+              stepSize: yStep,
+              callback(v) {
+                const d = v - 1;
+                return `${d >= 0 ? '+' : ''}${(d * 100).toFixed(0)}%`;
               },
             },
-            grid: { display: false },
-          },
-          y: {
-            ticks: { font: { size: 11 } },
-            grid: { color: colorOf('--color-border', 'rgba(148,163,184,0.2)') },
           },
         },
+        layout: { padding: { top: 8, right: 4, bottom: 0, left: 4 } },
       },
     });
     chartRegistry.add(histChart);
 
+    // x-label strip: 4 evenly spaced points
+    const xWrap = document.getElementById('history-xlabels');
+    if (xWrap) {
+      const fmt = currentRange === '1Y' ? monthLabel : shortDate;
+      const n = allDates.length;
+      if (n === 0) {
+        xWrap.innerHTML = '';
+      } else {
+        const picks = [0, Math.floor(n / 3), Math.floor((2 * n) / 3), n - 1]
+          .filter((i, idx, arr) => arr.indexOf(i) === idx);
+        xWrap.innerHTML = picks.map((i) => `<span>${fmt(allDates[i])}</span>`).join('');
+      }
+    }
+
     // a11y summary — series are TWR-rebased to 1.0, so (last - 1) is the cumulative return.
-    const port = bench.portfolio;
-    const b = bench.benchmark;
-    const portEnd = port[port.length - 1]?.value;
-    const benchEnd = b[b.length - 1]?.value;
-    const summary = portEnd != null
-      ? `${range} 구간 수익률 ${pctStr(portEnd - 1)}. 벤치마크 ${bench.benchmark_name || bench.benchmark_ticker} ${benchEnd != null ? pctStr(benchEnd - 1) : '—'}.`
+    const summary = portReturn != null
+      ? `${range} TWR ${pctStr(portReturn)}. 벤치마크 ${benchName} ${benchReturn != null ? pctStr(benchReturn) : '—'}.`
       : '데이터 없음';
     document.getElementById('history-summary').textContent = summary;
     wrap.setAttribute('aria-busy', 'false');
@@ -535,7 +729,6 @@
   narrow.addEventListener?.('change', () => {
     if (histChart) {
       histChart.options.aspectRatio = narrow.matches ? 1.3 : 2.4;
-      histChart.options.scales.x.ticks.maxTicksLimit = narrow.matches ? 4 : 7;
       histChart.update('none');
     }
   });
