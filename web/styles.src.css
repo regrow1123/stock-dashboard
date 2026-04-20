@@ -324,6 +324,16 @@
   }
   .weight-row .label-txt { color: var(--color-fg); font-weight: 600; }
   .weight-row .pct { color: var(--color-muted); font-variant-numeric: tabular-nums; }
+  .weight-row .day-change {
+    margin-left: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .weight-row .day-change.pos { color: var(--color-positive); }
+  .weight-row .day-change.neg { color: var(--color-negative); }
+  .weight-row .day-change.muted { color: var(--color-muted); }
   .weight-bar {
     grid-column: 1 / -1;
     height: 6px;

@@ -378,14 +378,23 @@
       return;
     }
     const top = [...rows].sort((a, b) => b.weight - a.weight).slice(0, 10);
-    wrap.innerHTML = top.map((r) => `
-      <div class="weight-row" aria-label="${escapeHTML(r.name || r.ticker)} ${pctInt(r.weight)}">
-        <span class="label-txt">${escapeHTML(r.name || r.ticker)}</span>
+    wrap.innerHTML = top.map((r) => {
+      const dc = r.day_change_pct;
+      const dcCls = dc == null ? 'muted' : dc >= 0 ? 'pos' : 'neg';
+      const dcText = dc == null ? '—' : pctStr(dc);
+      const aria = `${escapeHTML(r.name || r.ticker)} ${pctInt(r.weight)} 일변화 ${dcText}`;
+      return `
+      <div class="weight-row" aria-label="${aria}">
+        <span class="label-txt">
+          ${escapeHTML(r.name || r.ticker)}
+          <span class="day-change ${dcCls}">${dcText}</span>
+        </span>
         <span class="pct">${pctInt(r.weight)}</span>
         <div class="weight-bar" aria-hidden="true">
           <span style="width: ${(r.weight * 100).toFixed(1)}%"></span>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   async function renderAccountHoldings() {

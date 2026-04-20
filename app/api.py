@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,6 +8,7 @@ from app.metrics import avg_cost_from_seed_and_trades, pct_return, weights_from_
 from app.models import (
     Account, Dividend, Instrument, LivePrice, SeedHolding, Snapshot, Trade,
 )
+from app.prices import close_on_or_before
 
 router = APIRouter(prefix="/api")
 
@@ -86,12 +87,23 @@ def account_weights(account_id: str, db: Session = Depends(get_db)):
     if db.get(Account, account_id) is None:
         raise HTTPException(404)
     rows = _holdings_for(db, account_id)
-    names = {r["ticker"]: r["name"] for r in rows}
-    values = {r["ticker"]: r["value"] for r in rows}
-    return [
-        {"ticker": k, "name": names.get(k, k), "weight": v}
-        for k, v in weights_from_values(values).items()
-    ]
+    yesterday = date.today() - timedelta(days=1)
+    out = []
+    for r in rows:
+        prev = close_on_or_before(db, r["ticker"], yesterday)
+        cur = r["current_price"]
+        day_change = (cur - prev) / prev if prev and cur else None
+        out.append({
+            "ticker": r["ticker"],
+            "name": r["name"],
+            "weight": 0.0,  # filled below
+            "prev_close": prev,
+            "day_change_pct": day_change,
+        })
+    weights = weights_from_values({r["ticker"]: r["value"] for r in rows})
+    for o in out:
+        o["weight"] = weights.get(o["ticker"], 0.0)
+    return out
 
 
 @router.get("/summary")
