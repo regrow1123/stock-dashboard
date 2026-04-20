@@ -594,24 +594,8 @@
     const lineColor      = colorOf('--chart-line', '#1c1917');
     const lineBenchColor = colorOf('--chart-line-bench', '#a8a29e');
 
-    // Dark mode: keep stroke widths the same as light, but slightly bump
-    // the area fill alpha so the gradient still reads on near-black bg.
-    const isDark = darkMq.matches;
     const portWidth  = 1.5;
     const benchWidth = 1;
-    const fillAlpha  = isDark ? 0.22 : 0.15;
-
-    // area gradient: built per-render via scriptable so it sizes correctly
-    // even when canvas.height is 0 at chart-construction time.
-    const portFill = (ctx) => {
-      const { chart } = ctx;
-      const area = chart.chartArea;
-      if (!area) return hexToRgba(lineColor, fillAlpha * 0.55); // first paint fallback
-      const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
-      g.addColorStop(0, hexToRgba(lineColor, fillAlpha));
-      g.addColorStop(1, hexToRgba(lineColor, 0));
-      return g;
-    };
 
     histChart = new Chart(ctx, {
       type: 'line',
@@ -623,10 +607,7 @@
             data: allDates.map((d) => portMap[d] ?? null),
             spanGaps: true,
             borderColor: lineColor,
-            backgroundColor: portFill,
-            // fill from line to the 1.0 (= 0% return) baseline, not the
-            // chart bottom — keeps the shaded area honest about loss/gain.
-            fill: { target: { value: 1 } },
+            fill: false,
             pointRadius: 0,
             pointHoverRadius: 0,
             borderWidth: portWidth,
