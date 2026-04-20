@@ -384,9 +384,9 @@
       // negligible movement (< 0.05pp) → "—" so noise is hushed
       const wcText = wc == null
         ? '—'
-        : Math.abs(wc) < 0.0005
+        : Math.abs(wc) < 0.00005
           ? '—'
-          : `${wc >= 0 ? '+' : ''}${(wc * 100).toFixed(1)}%p`;
+          : `${wc >= 0 ? '+' : ''}${(wc * 100).toFixed(2)}%p`;
       const aria = `${escapeHTML(r.name || r.ticker)} ${pctInt(r.weight)} 비중변화 ${wcText}`;
       return `
       <div class="weight-row" aria-label="${aria}">
