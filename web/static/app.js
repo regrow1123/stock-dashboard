@@ -542,19 +542,24 @@
     const benchReturn = benchEndVal != null ? benchEndVal - 1 : null;
     const benchName = bench.benchmark_name || bench.benchmark_ticker || '벤치마크';
 
-    // y-axis bounds: tight fit to the data union so we don't waste the
-    // top/bottom of the chart on Chart.js auto-padding (otherwise the
-    // visible scale stretches to e.g. -100%..+200% when one series is
-    // far above 1.0).
+    // y-axis bounds: snap to nice step intervals so horizontal gridlines
+    // land at clean %-values (e.g. 0/25/50/75 instead of jagged auto-picks)
+    // and tight-fit so we don't waste the canvas on Chart.js's default
+    // -100%..+200% rounding when one series is far above 1.0.
     const allValues = [
       ...bench.portfolio.map((p) => p.value),
       ...bench.benchmark.map((p) => p.value),
     ].filter((v) => v != null);
     const dataMin = allValues.length ? Math.min(1, ...allValues) : 0.95;
     const dataMax = allValues.length ? Math.max(1, ...allValues) : 1.05;
-    const padFrac = 0.04 * (dataMax - dataMin);
-    const yMin = dataMin - padFrac;
-    const yMax = dataMax + padFrac;
+    const yRange = dataMax - dataMin;
+    const yStep = yRange > 1.0  ? 0.5
+                : yRange > 0.5  ? 0.25
+                : yRange > 0.2  ? 0.1
+                : yRange > 0.1  ? 0.05
+                :                 0.02;
+    const yMin = Math.floor(dataMin / yStep) * yStep;
+    const yMax = Math.ceil(dataMax / yStep) * yStep;
 
     if (titleEl) titleEl.textContent = `자산 추이 · vs ${benchName}`;
     if (heroEl) {
@@ -665,12 +670,20 @@
             min: yMin,
             max: yMax,
             border: { display: false },
-            grid: { color: colorOf('--chart-grid', '#e8e6df'), drawTicks: false },
+            grid: {
+              // 0%-baseline (TWR = 1.0) gets a slightly stronger line so the
+              // reader can quickly see gain/loss without reading the labels.
+              color: (ctx) => (ctx.tick && Math.abs(ctx.tick.value - 1) < 1e-9
+                ? colorOf('--chart-card-border', '#e8e6df')
+                : colorOf('--chart-grid', '#e8e6df')),
+              lineWidth: (ctx) => (ctx.tick && Math.abs(ctx.tick.value - 1) < 1e-9 ? 1 : 0.5),
+              drawTicks: false,
+            },
             ticks: {
               color: colorOf('--chart-axis', '#a8a29e'),
               font: { family: cssVar('--font-mono') || 'ui-monospace', size: 10 },
               padding: 4,
-              maxTicksLimit: 4,
+              stepSize: yStep,
               callback(v) {
                 const d = v - 1;
                 return `${d >= 0 ? '+' : ''}${(d * 100).toFixed(0)}%`;
