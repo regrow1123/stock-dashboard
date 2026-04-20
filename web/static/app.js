@@ -228,67 +228,11 @@
     applyChartDefaults();
     const s = await getJSON('/api/summary');
 
-    renderCurrencySwitch(s.totals || []);
-    renderHero(s.totals || []);
     renderAccountsList(s.accounts || []);
 
     const now = timeLabel();
     const u = document.getElementById('last-updated');
     if (u) u.textContent = `${now} 갱신`;
-  }
-
-  let selectedCurrency = null;
-
-  function renderCurrencySwitch(totals) {
-    const wrap = document.getElementById('currency-switch');
-    if (!wrap) return;
-    if (totals.length <= 1) {
-      wrap.hidden = true;
-      selectedCurrency = totals[0]?.currency || null;
-      return;
-    }
-    wrap.hidden = false;
-    if (!selectedCurrency) selectedCurrency = totals[0].currency;
-    const group = wrap.querySelector('.chip-group');
-    group.innerHTML = totals.map((t) => `
-      <button type="button" role="tab" class="chip"
-              data-cur="${t.currency}"
-              aria-selected="${t.currency === selectedCurrency}">
-        ${t.currency}
-      </button>`).join('');
-    group.querySelectorAll('.chip').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        selectedCurrency = btn.dataset.cur;
-        group.querySelectorAll('.chip').forEach((b) => {
-          b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
-        });
-        renderHero(totals);
-      });
-    });
-  }
-
-  function renderHero(totals) {
-    const hero = document.getElementById('hero');
-    if (!hero) return;
-    const t = totals.find((x) => x.currency === selectedCurrency) || totals[0];
-    hero.setAttribute('aria-busy', 'false');
-    if (!t) {
-      hero.innerHTML = `<div class="card card-body"><div class="label">데이터 없음</div></div>`;
-      return;
-    }
-    const cls = t.pct_return >= 0 ? 'pill-pos' : 'pill-neg';
-    hero.innerHTML = `
-      <div class="card card-body">
-        <div class="flex items-baseline justify-between gap-3">
-          <span class="label">${t.currency} 합계</span>
-          <span class="pill ${cls}">${pctStr(t.pct_return)}</span>
-        </div>
-        <div class="hero-number mt-1">${fmtMoney(t.value, t.currency)}</div>
-        <div class="kv mt-3">
-          <span>평가손익</span>
-          <strong class="${t.pnl >= 0 ? 'pos' : 'neg'}">${signedMoney(t.pnl, t.currency)}</strong>
-        </div>
-      </div>`;
   }
 
   function renderAccountsList(accounts) {
