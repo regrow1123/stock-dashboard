@@ -596,14 +596,22 @@
     const lineColor      = colorOf('--chart-line', '#1c1917');
     const lineBenchColor = colorOf('--chart-line-bench', '#a8a29e');
 
+    // Dark mode: bump line widths and fill density a notch — off-white on
+    // near-black needs more visual weight than ink on cream to feel equally
+    // crisp.
+    const isDark = darkMq.matches;
+    const portWidth  = isDark ? 2   : 1.5;
+    const benchWidth = isDark ? 1.5 : 1;
+    const fillAlpha  = isDark ? 0.22 : 0.15;
+
     // area gradient: built per-render via scriptable so it sizes correctly
     // even when canvas.height is 0 at chart-construction time.
     const portFill = (ctx) => {
       const { chart } = ctx;
       const area = chart.chartArea;
-      if (!area) return hexToRgba(lineColor, 0.08); // first paint fallback
+      if (!area) return hexToRgba(lineColor, fillAlpha * 0.55); // first paint fallback
       const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
-      g.addColorStop(0, hexToRgba(lineColor, 0.15));
+      g.addColorStop(0, hexToRgba(lineColor, fillAlpha));
       g.addColorStop(1, hexToRgba(lineColor, 0));
       return g;
     };
@@ -624,7 +632,7 @@
             fill: { target: { value: 1 } },
             pointRadius: 0,
             pointHoverRadius: 0,
-            borderWidth: 1.5,
+            borderWidth: portWidth,
             tension: 0.18,
           },
           {
@@ -635,7 +643,7 @@
             borderDash: [2, 3],
             pointRadius: 0,
             pointHoverRadius: 0,
-            borderWidth: 1,
+            borderWidth: benchWidth,
             tension: 0.18,
             fill: false,
           },
