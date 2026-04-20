@@ -305,7 +305,6 @@
       renderAccountHero(),
       renderAccountWeights(),
       renderAccountHoldings(),
-      renderAccountRealizedDiv(),
       renderAccountTrades(),
       renderAccountHistory(currentRange),
     ]);
@@ -422,19 +421,6 @@
           </tr>`;
       }).join('');
     }
-  }
-
-  async function renderAccountRealizedDiv() {
-    const [r, d] = await Promise.all([
-      getJSON(`/api/accounts/${window.ACCOUNT_ID}/realized`),
-      getJSON(`/api/accounts/${window.ACCOUNT_ID}/dividends`),
-    ]);
-    const cur = window.ACCOUNT_CURRENCY;
-    const rEl = document.getElementById('realized');
-    rEl.textContent = signedMoney(r.realized, cur);
-    rEl.className = `hero-number block mt-1 ${r.realized >= 0 ? 'pos' : 'neg'}`;
-    rEl.style.fontSize = 'clamp(1.25rem, 4.5vw, 1.5rem)';
-    document.getElementById('dividend').textContent = fmtMoney(d.total, cur);
   }
 
   async function renderAccountTrades() {
