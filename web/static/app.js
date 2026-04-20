@@ -552,12 +552,17 @@
     ].filter((v) => v != null);
     const dataMin = allValues.length ? Math.min(1, ...allValues) : 0.95;
     const dataMax = allValues.length ? Math.max(1, ...allValues) : 1.05;
-    // small breathing room around the data; Chart.js picks tick locations
-    // within these bounds via maxTicksLimit + its built-in nice-numbers
-    // algorithm (no manual stepSize, so we don't lock too many ticks).
-    const yPad = 0.04 * (dataMax - dataMin);
-    const yMin = dataMin - yPad;
-    const yMax = dataMax + yPad;
+    // pick a "nice" step that yields 3-5 evenly spaced gridlines, then
+    // snap bounds to step multiples so lines and labels both land cleanly.
+    const yRange = dataMax - dataMin;
+    const yStep = yRange > 1.0  ? 1.0
+                : yRange > 0.4  ? 0.5
+                : yRange > 0.2  ? 0.25
+                : yRange > 0.1  ? 0.10
+                : yRange > 0.05 ? 0.05
+                :                 0.02;
+    const yMin = Math.floor(dataMin / yStep) * yStep;
+    const yMax = Math.ceil(dataMax / yStep) * yStep;
 
     if (titleEl) titleEl.textContent = `자산 추이 · vs ${benchName}`;
     if (heroEl) {
@@ -688,7 +693,7 @@
               color: colorOf('--chart-axis', '#a8a29e'),
               font: { family: cssVar('--font-mono') || 'ui-monospace', size: 10 },
               padding: 4,
-              maxTicksLimit: 4,
+              stepSize: yStep,
               callback(v) {
                 const d = v - 1;
                 return `${d >= 0 ? '+' : ''}${(d * 100).toFixed(0)}%`;
