@@ -552,14 +552,13 @@
     ].filter((v) => v != null);
     const dataMin = allValues.length ? Math.min(1, ...allValues) : 0.95;
     const dataMax = allValues.length ? Math.max(1, ...allValues) : 1.05;
-    // Aim for exactly 4 evenly-spaced gridlines (= 3 intervals) covering
-    // the data: pick the smallest "nice" step ≥ range/3, then snap bounds
-    // to step multiples so labels land on round %-values.
-    const NICE_STEPS = [0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 5.0];
-    const idealStep = (dataMax - dataMin) / 3;
-    const yStep = NICE_STEPS.find((s) => s >= idealStep) ?? 10;
-    const yMin = Math.floor(dataMin / yStep) * yStep;
-    const yMax = Math.ceil(dataMax / yStep) * yStep;
+    // Tight-fit bounds with small breathing room. Step / explicit ticks are
+    // computed below in afterBuildTicks so we always get exactly 4
+    // evenly-spaced gridlines no matter the range — labels won't all be
+    // round %-values but the chart never wastes vertical space.
+    const yPad = 0.03 * (dataMax - dataMin);
+    const yMin = dataMin - yPad;
+    const yMax = dataMax + yPad;
 
     if (titleEl) titleEl.textContent = `자산 추이 · vs ${benchName}`;
     if (heroEl) {
@@ -680,17 +679,23 @@
             grid: {
               // 0%-baseline (TWR = 1.0) gets a slightly stronger line so the
               // reader can quickly see gain/loss without reading the labels.
-              color: (ctx) => (ctx.tick && Math.abs(ctx.tick.value - 1) < 1e-9
+              color: (ctx) => (ctx.tick && Math.abs(ctx.tick.value - 1) < 0.005
                 ? colorOf('--chart-card-border', '#e8e6df')
                 : colorOf('--chart-grid', '#e8e6df')),
-              lineWidth: (ctx) => (ctx.tick && Math.abs(ctx.tick.value - 1) < 1e-9 ? 1 : 0.5),
+              lineWidth: (ctx) => (ctx.tick && Math.abs(ctx.tick.value - 1) < 0.005 ? 1 : 0.5),
               drawTicks: false,
+            },
+            // exactly 4 evenly-spaced ticks across the (tight) y-range
+            afterBuildTicks: (axis) => {
+              const lo = axis.min;
+              const hi = axis.max;
+              axis.ticks = [0, 1, 2, 3].map((i) => ({ value: lo + (hi - lo) * (i / 3) }));
             },
             ticks: {
               color: colorOf('--chart-axis', '#a8a29e'),
               font: { family: cssVar('--font-mono') || 'ui-monospace', size: 10 },
               padding: 4,
-              stepSize: yStep,
+              autoSkip: false,
               callback(v) {
                 const d = v - 1;
                 return `${d >= 0 ? '+' : ''}${(d * 100).toFixed(0)}%`;
