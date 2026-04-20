@@ -625,6 +625,9 @@
         aspectRatio: narrow.matches ? 1.3 : 2.4,
         interaction: { intersect: false, mode: 'index' },
         animation: reducedMotion.matches ? false : { duration: 220 },
+        // color-property animations interpolate strings → can't handle CanvasGradient
+        // returned by the scriptable portFill; disable to avoid tick crashes.
+        animations: { colors: false },
         plugins: {
           legend: { display: false },
           tooltip: {
