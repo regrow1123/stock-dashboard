@@ -125,11 +125,15 @@ def account_weights(account_id: str, db: Session = Depends(get_db)):
 
 MARKET_TICKERS = [
     # (ticker, label, group)
-    ("^KS11", "KOSPI",   "kr"),
-    ("^KQ11", "KOSDAQ",  "kr"),
-    ("^GSPC", "S&P",     "us"),
-    ("^IXIC", "NASDAQ",  "us"),
-    ("KRW=X", "USD/KRW", "fx"),
+    ("^KS11",   "KOSPI",   "kr"),
+    ("^KQ11",   "KOSDAQ",  "kr"),
+    ("^GSPC",   "S&P",     "us"),
+    ("^IXIC",   "NASDAQ",  "us"),
+    ("^VIX",    "VIX",     "us"),
+    ("KRW=X",   "USD/KRW", "fx"),
+    ("BTC-USD", "BTC",     "alt"),
+    ("CL=F",    "WTI",     "alt"),
+    ("GC=F",    "Gold",    "alt"),
 ]
 
 

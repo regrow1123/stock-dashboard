@@ -252,7 +252,7 @@
         const pct = (Math.abs(r.change_pct) * 100).toFixed(2);
         return `<span class="mt-item"><span class="mt-lbl">${escapeHTML(r.label)}</span><span class="mt-val ${cls}">${arrow} ${pct}%</span></span>`;
       };
-      const groups = ['kr', 'us', 'fx'];
+      const groups = ['kr', 'us', 'fx', 'alt'];
       host.innerHTML = groups.map((g) => {
         const items = rows.filter((r) => r.group === g).map(itemHtml).join('');
         return items ? `<div class="mt-row">${items}</div>` : '';
