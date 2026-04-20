@@ -552,15 +552,12 @@
     ].filter((v) => v != null);
     const dataMin = allValues.length ? Math.min(1, ...allValues) : 0.95;
     const dataMax = allValues.length ? Math.max(1, ...allValues) : 1.05;
-    // pick a "nice" step that yields 3-5 evenly spaced gridlines, then
-    // snap bounds to step multiples so lines and labels both land cleanly.
-    const yRange = dataMax - dataMin;
-    const yStep = yRange > 1.0  ? 1.0
-                : yRange > 0.4  ? 0.5
-                : yRange > 0.2  ? 0.25
-                : yRange > 0.1  ? 0.10
-                : yRange > 0.05 ? 0.05
-                :                 0.02;
+    // Aim for exactly 4 evenly-spaced gridlines (= 3 intervals) covering
+    // the data: pick the smallest "nice" step ≥ range/3, then snap bounds
+    // to step multiples so labels land on round %-values.
+    const NICE_STEPS = [0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 5.0];
+    const idealStep = (dataMax - dataMin) / 3;
+    const yStep = NICE_STEPS.find((s) => s >= idealStep) ?? 10;
     const yMin = Math.floor(dataMin / yStep) * yStep;
     const yMax = Math.ceil(dataMax / yStep) * yStep;
 
