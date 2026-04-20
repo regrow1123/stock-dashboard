@@ -88,21 +88,33 @@ def account_weights(account_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404)
     rows = _holdings_for(db, account_id)
     yesterday = date.today() - timedelta(days=1)
-    out = []
+    weights = weights_from_values({r["ticker"]: r["value"] for r in rows})
+
+    # yesterday's weights — use today's quantities × prev close. If a
+    # ticker has no prev_close we exclude it from the prev total to avoid
+    # skewing the denominator (and its weight_change is null).
+    prev_values = {}
     for r in rows:
         prev = close_on_or_before(db, r["ticker"], yesterday)
-        cur = r["current_price"]
-        day_change = (cur - prev) / prev if prev and cur else None
+        if prev is not None:
+            prev_values[r["ticker"]] = r["quantity"] * prev
+    prev_total = sum(prev_values.values())
+    prev_weights = {
+        tk: v / prev_total for tk, v in prev_values.items()
+    } if prev_total > 0 else {}
+
+    out = []
+    for r in rows:
+        tk = r["ticker"]
+        cur_w = weights.get(tk, 0.0)
+        prev_w = prev_weights.get(tk)
         out.append({
-            "ticker": r["ticker"],
+            "ticker": tk,
             "name": r["name"],
-            "weight": 0.0,  # filled below
-            "prev_close": prev,
-            "day_change_pct": day_change,
+            "weight": cur_w,
+            "prev_weight": prev_w,
+            "weight_change": (cur_w - prev_w) if prev_w is not None else None,
         })
-    weights = weights_from_values({r["ticker"]: r["value"] for r in rows})
-    for o in out:
-        o["weight"] = weights.get(o["ticker"], 0.0)
     return out
 
 

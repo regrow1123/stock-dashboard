@@ -379,15 +379,20 @@
     }
     const top = [...rows].sort((a, b) => b.weight - a.weight).slice(0, 10);
     wrap.innerHTML = top.map((r) => {
-      const dc = r.day_change_pct;
-      const dcCls = dc == null ? 'muted' : dc >= 0 ? 'pos' : 'neg';
-      const dcText = dc == null ? '—' : pctStr(dc);
-      const aria = `${escapeHTML(r.name || r.ticker)} ${pctInt(r.weight)} 일변화 ${dcText}`;
+      const wc = r.weight_change; // fraction in pp (e.g., 0.012 = +1.2pp)
+      const wcCls = wc == null ? 'muted' : wc >= 0 ? 'pos' : 'neg';
+      // negligible movement (< 0.05pp) → "—" so noise is hushed
+      const wcText = wc == null
+        ? '—'
+        : Math.abs(wc) < 0.0005
+          ? '—'
+          : `${wc >= 0 ? '+' : ''}${(wc * 100).toFixed(1)}%p`;
+      const aria = `${escapeHTML(r.name || r.ticker)} ${pctInt(r.weight)} 비중변화 ${wcText}`;
       return `
       <div class="weight-row" aria-label="${aria}">
         <span class="label-txt">
           ${escapeHTML(r.name || r.ticker)}
-          <span class="day-change ${dcCls}">${dcText}</span>
+          <span class="day-change ${wcCls}">${wcText}</span>
         </span>
         <span class="pct">${pctInt(r.weight)}</span>
         <div class="weight-bar" aria-hidden="true">
