@@ -249,6 +249,14 @@
     }[rating?.toLowerCase()] || rating || '';
   }
 
+  function skewLabel(score) {
+    if (score == null) return '';
+    if (score < 115) return '낮음';
+    if (score < 130) return '평이';
+    if (score < 145) return '높음';
+    return '매우 높음';
+  }
+
   async function renderSentiment() {
     const host = document.getElementById('sentiment');
     if (!host) return;
@@ -259,34 +267,59 @@
       host.innerHTML = '';
       return;
     }
+    const cards = [];
     const fg = data.fear_and_greed;
-    if (!fg || fg.score == null) {
-      host.innerHTML = '';
-      return;
+    if (fg && fg.score != null) {
+      const score = Math.round(fg.score);
+      const prev = fg.previous_close != null ? Math.round(fg.previous_close) : null;
+      const w = fg.previous_1_week != null ? Math.round(fg.previous_1_week) : null;
+      const m = fg.previous_1_month != null ? Math.round(fg.previous_1_month) : null;
+      const rating = fgRatingKo(fg.rating);
+      cards.push(`
+        <div class="sent-card">
+          <div class="sent-head">
+            <span class="sent-lbl">CNN Fear &amp; Greed</span>
+            <span class="sent-score">${score}<span class="sent-rating"> · ${escapeHTML(rating)}</span></span>
+          </div>
+          <div class="sent-gauge sent-gauge-fg" aria-label="${score} / 100">
+            <div class="sent-track"></div>
+            ${prev != null ? `<div class="sent-prev" style="left:${prev}%" title="어제 ${prev}"></div>` : ''}
+            <div class="sent-marker" style="left:${score}%"></div>
+          </div>
+          <div class="sent-meta">
+            <span>어제 ${prev ?? '—'}</span>
+            <span>1주 ${w ?? '—'}</span>
+            <span>1달 ${m ?? '—'}</span>
+          </div>
+        </div>`);
     }
-    const score = Math.round(fg.score);
-    const prev = fg.previous_close != null ? Math.round(fg.previous_close) : null;
-    const w = fg.previous_1_week != null ? Math.round(fg.previous_1_week) : null;
-    const m = fg.previous_1_month != null ? Math.round(fg.previous_1_month) : null;
-    const rating = fgRatingKo(fg.rating);
-    host.innerHTML = `
-      <div class="sent-card">
-        <div class="sent-head">
-          <span class="sent-lbl">CNN Fear &amp; Greed</span>
-          <span class="sent-score">${score}<span class="sent-rating"> · ${escapeHTML(rating)}</span></span>
-        </div>
-        <div class="sent-gauge" aria-label="${score} / 100">
-          <div class="sent-track"></div>
-          ${prev != null ? `<div class="sent-prev" style="left:${prev}%" title="어제 ${prev}"></div>` : ''}
-          <div class="sent-marker" style="left:${score}%"></div>
-        </div>
-        <div class="sent-meta">
-          <span>어제 ${prev ?? '—'}</span>
-          <span>1주 ${w ?? '—'}</span>
-          <span>1달 ${m ?? '—'}</span>
-        </div>
-      </div>
-    `;
+    const sk = data.skew;
+    if (sk && sk.score != null) {
+      // gauge range 100..160 (covers normal market activity)
+      const SK_LO = 100, SK_HI = 160;
+      const pct = (v) => Math.max(0, Math.min(100, ((v - SK_LO) / (SK_HI - SK_LO)) * 100));
+      const score = sk.score.toFixed(1);
+      const prev = sk.previous_close;
+      const label = skewLabel(sk.score);
+      cards.push(`
+        <div class="sent-card">
+          <div class="sent-head">
+            <span class="sent-lbl">CBOE SKEW · 꼬리위험</span>
+            <span class="sent-score">${score}<span class="sent-rating"> · ${escapeHTML(label)}</span></span>
+          </div>
+          <div class="sent-gauge sent-gauge-skew" aria-label="${score}">
+            <div class="sent-track"></div>
+            ${prev != null ? `<div class="sent-prev" style="left:${pct(prev)}%" title="어제 ${prev.toFixed(1)}"></div>` : ''}
+            <div class="sent-marker" style="left:${pct(sk.score)}%"></div>
+          </div>
+          <div class="sent-meta">
+            <span>${SK_LO}</span>
+            <span>어제 ${prev != null ? prev.toFixed(1) : '—'}</span>
+            <span>${SK_HI}</span>
+          </div>
+        </div>`);
+    }
+    host.innerHTML = cards.join('');
   }
 
   async function renderMarketTicker() {

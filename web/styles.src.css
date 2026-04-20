@@ -498,16 +498,30 @@
   .sent-track {
     position: absolute; inset: 0;
     border-radius: 999px;
+    opacity: 0.55;
+  }
+  .sent-gauge-fg .sent-track {
     background: linear-gradient(
       90deg,
       #dc2626 0%,    /* extreme fear */
-      #f59e0b 30%,   /* fear */
+      #f59e0b 30%,
       #facc15 50%,   /* neutral */
-      #84cc16 70%,   /* greed */
+      #84cc16 70%,
       #16a34a 100%   /* extreme greed */
     );
-    opacity: 0.55;
   }
+  .sent-gauge-skew .sent-track {
+    /* low SKEW = calm (green); high SKEW = elevated tail risk (red) */
+    background: linear-gradient(
+      90deg,
+      #16a34a 0%,
+      #84cc16 30%,
+      #facc15 55%,
+      #f59e0b 75%,
+      #dc2626 100%
+    );
+  }
+  .sentiment .sent-card + .sent-card { margin-top: 0.5rem; }
   .sent-marker {
     position: absolute; top: -2px; bottom: -2px; width: 2px;
     background: var(--chart-hero);

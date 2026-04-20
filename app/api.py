@@ -167,7 +167,23 @@ def markets(db: Session = Depends(get_db)):
 
 @router.get("/sentiment")
 def sentiment(db: Session = Depends(get_db)):
-    return {"fear_and_greed": cnn_fg(db)}
+    skew_rows = (
+        db.query(Benchmark)
+        .filter(Benchmark.ticker == "^SKEW")
+        .order_by(Benchmark.date.desc())
+        .limit(2)
+        .all()
+    )
+    skew = None
+    if skew_rows:
+        latest = skew_rows[0]
+        prev = skew_rows[1] if len(skew_rows) > 1 else None
+        skew = {
+            "score": float(latest.close),
+            "previous_close": float(prev.close) if prev else None,
+            "as_of": latest.date.isoformat(),
+        }
+    return {"fear_and_greed": cnn_fg(db), "skew": skew}
 
 
 @router.get("/summary")
