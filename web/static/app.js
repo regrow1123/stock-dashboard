@@ -413,8 +413,9 @@
       list.innerHTML = `<li class="row-item"><div><div class="row-title">보유 종목이 없습니다</div></div></li>`;
     } else {
       list.innerHTML = rows.map((r) => {
-        const sign = r.pnl >= 0 ? 'pos' : 'neg';
-        const pill = r.pct_return >= 0 ? 'pill-pos' : 'pill-neg';
+        const dc = r.day_change_pct;
+        const dcPill = dc == null ? 'pill-muted' : dc >= 0 ? 'pill-pos' : 'pill-neg';
+        const dcText = dc == null ? '—' : pctStr(dc);
         return `
           <li>
             <div class="row-item">
@@ -425,8 +426,7 @@
               <div class="row-right">
                 ${fmtMoney(r.value, cur)}
                 <div class="row-sub">
-                  <span class="pill ${pill}">${pctStr(r.pct_return)}</span>
-                  <span class="ml-2 ${sign}">${signedMoney(r.pnl, cur)}</span>
+                  <span class="pill ${dcPill}">${dcText}</span>
                 </div>
               </div>
             </div>
@@ -438,6 +438,9 @@
     if (tbody) {
       tbody.innerHTML = rows.map((r) => {
         const weight = total > 0 ? r.value / total : 0;
+        const dc = r.day_change_pct;
+        const dcPill = dc == null ? 'pill-muted' : dc >= 0 ? 'pill-pos' : 'pill-neg';
+        const dcText = dc == null ? '—' : pctStr(dc);
         return `
           <tr>
             <td>
@@ -449,8 +452,7 @@
             <td>${r.current_price != null ? fmtMoney(r.current_price, cur, { fraction: 2 }) : '—'}</td>
             <td>${fmtMoney(r.value, cur)}</td>
             <td>${pctInt(weight)}</td>
-            <td class="${r.pnl >= 0 ? 'pos' : 'neg'}">${signedMoney(r.pnl, cur)}</td>
-            <td><span class="pill ${r.pct_return >= 0 ? 'pill-pos' : 'pill-neg'}">${pctStr(r.pct_return)}</span></td>
+            <td><span class="pill ${dcPill}">${dcText}</span></td>
           </tr>`;
       }).join('');
     }

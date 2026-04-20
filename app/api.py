@@ -38,6 +38,7 @@ def _holdings_for(db: Session, account_id: str) -> list[dict[str, Any]]:
         trades_by_ticker.setdefault(t.ticker, []).append(t)
     tickers = set(seeds) | set(trades_by_ticker)
     names = _name_map(db)
+    yesterday = date.today() - timedelta(days=1)
     out: list[dict[str, Any]] = []
     for tk in tickers:
         seed = seeds.get(tk)
@@ -51,6 +52,8 @@ def _holdings_for(db: Session, account_id: str) -> list[dict[str, Any]]:
         current = _live(db, tk)
         value = qty * current if current is not None else qty * avg
         cost = qty * avg
+        prev = close_on_or_before(db, tk, yesterday)
+        day_change = (current - prev) / prev if prev and current else None
         out.append({
             "ticker": tk,
             "name": names.get(tk, tk),
@@ -58,6 +61,8 @@ def _holdings_for(db: Session, account_id: str) -> list[dict[str, Any]]:
             "avg_price": avg,
             "cost": cost,
             "current_price": current,
+            "prev_close": prev,
+            "day_change_pct": day_change,
             "value": value,
             "pnl": value - cost,
             "pct_return": pct_return(cost, value),
