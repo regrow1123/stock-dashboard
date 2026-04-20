@@ -1,6 +1,12 @@
 {% extends "base.html" %}
-{% block title %}포트폴리오{% endblock %}
-{% block header_title %}포트폴리오{% endblock %}
+{% block title %}Stock Dashboard{% endblock %}
+{% block header_title %}Stock Dashboard{% endblock %}
+
+{% block header_sub %}
+<div class="market-ticker" id="market-ticker" aria-live="polite">
+  <div class="market-ticker-inner"></div>
+</div>
+{% endblock %}
 
 {% block content %}
 <section aria-labelledby="accounts-heading" class="mt-1">

@@ -433,6 +433,31 @@
     white-space: nowrap;
   }
 
+  /* market ticker subline under the header title (overview page only) */
+  .market-ticker {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 1rem 0.625rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .market-ticker::-webkit-scrollbar { display: none; }
+  .market-ticker-inner {
+    display: flex;
+    gap: 1.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .market-ticker .mt-item { display: inline-flex; gap: 0.375rem; align-items: baseline; }
+  .market-ticker .mt-lbl { color: var(--color-muted); letter-spacing: 0.04em; }
+  .market-ticker .mt-val { font-weight: 600; }
+  .market-ticker .mt-val.pos { color: var(--color-positive); }
+  .market-ticker .mt-val.neg { color: var(--color-negative); }
+  .market-ticker .mt-val.muted { color: var(--color-muted); font-weight: 400; }
+
   /* toast */
   .toast-host {
     position: fixed;

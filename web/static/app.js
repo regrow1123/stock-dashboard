@@ -226,13 +226,35 @@
 
   async function renderOverview() {
     applyChartDefaults();
-    const s = await getJSON('/api/summary');
+    const [s] = await Promise.all([
+      getJSON('/api/summary'),
+      renderMarketTicker(),
+    ]);
 
     renderAccountsList(s.accounts || []);
 
     const now = timeLabel();
     const u = document.getElementById('last-updated');
     if (u) u.textContent = `${now} 갱신`;
+  }
+
+  async function renderMarketTicker() {
+    const host = document.querySelector('#market-ticker .market-ticker-inner');
+    if (!host) return;
+    try {
+      const rows = await getJSON('/api/markets');
+      host.innerHTML = rows.map((r) => {
+        if (r.change_pct == null) {
+          return `<span class="mt-item"><span class="mt-lbl">${escapeHTML(r.label)}</span><span class="mt-val muted">—</span></span>`;
+        }
+        const cls = r.change_pct >= 0 ? 'pos' : 'neg';
+        const arrow = r.change_pct >= 0 ? '▲' : '▼';
+        const pct = (Math.abs(r.change_pct) * 100).toFixed(2);
+        return `<span class="mt-item"><span class="mt-lbl">${escapeHTML(r.label)}</span><span class="mt-val ${cls}">${arrow} ${pct}%</span></span>`;
+      }).join('');
+    } catch (e) {
+      host.innerHTML = '';
+    }
   }
 
   function renderAccountsList(accounts) {

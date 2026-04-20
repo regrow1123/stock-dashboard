@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.metrics import avg_cost_from_seed_and_trades, pct_return, weights_from_values
 from app.models import (
-    Account, Dividend, Instrument, LivePrice, SeedHolding, Snapshot, Trade,
+    Account, Benchmark, Dividend, Instrument, LivePrice, SeedHolding, Snapshot, Trade,
 )
 from app.prices import close_on_or_before
 
@@ -119,6 +119,38 @@ def account_weights(account_id: str, db: Session = Depends(get_db)):
             "weight": cur_w,
             "prev_weight": prev_w,
             "weight_change": (cur_w - prev_w) if prev_w is not None else None,
+        })
+    return out
+
+
+MARKET_TICKERS = [
+    ("^KS11", "KOSPI"),
+    ("^GSPC", "S&P"),
+]
+
+
+@router.get("/markets")
+def markets(db: Session = Depends(get_db)):
+    out = []
+    for tk, label in MARKET_TICKERS:
+        rows = (
+            db.query(Benchmark)
+            .filter(Benchmark.ticker == tk)
+            .order_by(Benchmark.date.desc())
+            .limit(2)
+            .all()
+        )
+        if len(rows) < 2:
+            out.append({"ticker": tk, "label": label, "close": None, "change_pct": None})
+            continue
+        latest, prev = rows[0], rows[1]
+        change = (latest.close - prev.close) / prev.close if prev.close else None
+        out.append({
+            "ticker": tk,
+            "label": label,
+            "close": float(latest.close),
+            "change_pct": change,
+            "as_of": latest.date.isoformat(),
         })
     return out
 
