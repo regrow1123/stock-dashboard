@@ -570,6 +570,8 @@
     // look up the live instance directly rather than trusting a stale `histChart` var.
     const existing = window.Chart?.getChart?.(canvas);
     if (existing) { existing.destroy(); chartRegistry.delete(existing); }
+    // clear any stale external-tooltip from the previous chart instance
+    canvas.parentNode?.querySelector('.chart-tooltip')?.classList.remove('is-visible');
     const ctx = canvas.getContext('2d');
 
     const lineColor      = colorOf('--chart-line', '#1c1917');
@@ -603,6 +605,7 @@
             pointHoverRadius: 0,
             borderWidth: 1.5,
             tension: 0.18,
+            yAxisID: 'y',
           },
           {
             label: benchName,
@@ -615,6 +618,7 @@
             borderWidth: 1,
             tension: 0.18,
             fill: false,
+            yAxisID: 'y2',
           },
         ],
       },
@@ -639,7 +643,11 @@
         },
         scales: {
           x: { display: false },
-          y: { display: false },
+          // dual y-axes: portfolio and benchmark scaled independently so
+          // both lines fit even when one dramatically out-/under-performs.
+          // Both rebased to 1.0; "above 1.0 = positive return" still holds.
+          y: { display: false, position: 'left' },
+          y2: { display: false, position: 'right' },
         },
         layout: { padding: { top: 8, right: 4, bottom: 0, left: 4 } },
       },
