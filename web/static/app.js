@@ -323,22 +323,59 @@
     });
   }
 
-  function skewDialCard(sk) {
-    return dialCard({
-      title: 'CBOE SKEW · 꼬리위험',
-      ariaLabel: `SKEW ${sk.score.toFixed(1)}, ${skewLabel(sk.score)}`,
-      score: sk.score,
-      scoreFmt: sk.score.toFixed(1),
-      rating: skewLabel(sk.score),
-      lo: 100, hi: 160,
-      gradientId: 'skew-arc-grad',
-      ticks: [100, 115, 130, 145, 160],
-      reversed: true,
-      history: [
-        { value: sk.previous_close, label: '어제' },
-      ],
-      scoreDecimals: 1,
-    });
+  function skewSparkCard(sk) {
+    const hist = (sk.history || []).filter((p) => p.score != null);
+    if (hist.length < 2) return '';
+    // tight y-range with small padding
+    const vals = hist.map((p) => p.score);
+    const dataMin = Math.min(...vals);
+    const dataMax = Math.max(...vals);
+    const pad = Math.max(1, (dataMax - dataMin) * 0.08);
+    const yMin = dataMin - pad;
+    const yMax = dataMax + pad;
+    // viewBox geometry
+    const W = 300, H = 70, PX = 4, PY = 4;
+    const xStep = (W - 2 * PX) / (hist.length - 1);
+    const yAt = (v) => PY + (yMax - v) / (yMax - yMin) * (H - 2 * PY);
+    const xAt = (i) => PX + i * xStep;
+    const points = hist.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.score).toFixed(1)}`);
+    const pathD = `M ${points.join(' L ')}`;
+    // area fill: extend path down to bottom
+    const areaD = `M ${PX},${H - PY} L ${points.join(' L ')} L ${(W - PX).toFixed(1)},${H - PY} Z`;
+    // last point
+    const lastX = xAt(hist.length - 1);
+    const lastY = yAt(hist[hist.length - 1].score);
+    // zone boundaries (in SKEW units): 115 / 130 / 145. Only draw those within view.
+    const zoneLines = [115, 130, 145]
+      .filter((v) => v >= yMin && v <= yMax)
+      .map((v) => {
+        const y = yAt(v);
+        return `<line class="sk-zone-line" x1="0" y1="${y.toFixed(1)}" x2="${W}" y2="${y.toFixed(1)}"/>`;
+      })
+      .join('');
+
+    const firstDate = hist[0].date;
+    const lastDate = hist[hist.length - 1].date;
+    const label = skewLabel(sk.score);
+
+    return `
+      <div class="sent-card">
+        <div class="sent-head">
+          <span class="sent-lbl">CBOE SKEW · 꼬리위험</span>
+          <span class="sent-score">${sk.score.toFixed(1)}<span class="sent-rating"> · ${escapeHTML(label)}</span></span>
+        </div>
+        <svg class="sk-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+             aria-label="SKEW 60일 추이, 현재 ${sk.score.toFixed(1)}">
+          ${zoneLines}
+          <path class="sk-area" d="${areaD}"/>
+          <path class="sk-line" d="${pathD}"/>
+          <circle class="sk-dot" cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3"/>
+        </svg>
+        <div class="sk-xlabels">
+          <span>${escapeHTML(firstDate.slice(2))}</span>
+          <span>${escapeHTML(lastDate.slice(2))}</span>
+        </div>
+      </div>`;
   }
 
   function skewLabel(score) {
@@ -366,7 +403,7 @@
     }
     const sk = data.skew;
     if (sk && sk.score != null) {
-      cards.push(skewDialCard(sk));
+      cards.push(skewSparkCard(sk));
     }
     host.innerHTML = cards.join('');
   }

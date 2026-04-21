@@ -171,17 +171,22 @@ def sentiment(db: Session = Depends(get_db)):
         db.query(Benchmark)
         .filter(Benchmark.ticker == "^SKEW")
         .order_by(Benchmark.date.desc())
-        .limit(2)
+        .limit(60)
         .all()
     )
     skew = None
     if skew_rows:
         latest = skew_rows[0]
         prev = skew_rows[1] if len(skew_rows) > 1 else None
+        history = [
+            {"date": r.date.isoformat(), "score": float(r.close)}
+            for r in reversed(skew_rows)
+        ]
         skew = {
             "score": float(latest.close),
             "previous_close": float(prev.close) if prev else None,
             "as_of": latest.date.isoformat(),
+            "history": history,
         }
     return {"fear_and_greed": cnn_fg(db), "skew": skew}
 
