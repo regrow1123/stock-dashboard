@@ -532,14 +532,15 @@
           ? fmtMoney(r.current_price, cur, { fraction: 2 })
           : '—';
         const name = escapeHTML(r.name || r.ticker);
+        const qty = r.quantity % 1 === 0 ? r.quantity : r.quantity.toFixed(4).replace(/\.?0+$/, '');
         return `
           <li>
             <button type="button" class="row-item" data-ticker="${escapeHTML(r.ticker)}"
                     data-name="${name}"
-                    aria-label="${name} 매매내역 보기">
+                    aria-label="${name} ${qty}주, 매매내역 보기">
               <div>
                 <div class="row-title">${name}</div>
-                <div class="row-sub">${escapeHTML(r.ticker)}</div>
+                <div class="row-sub">${escapeHTML(r.ticker)} · ${qty}주</div>
               </div>
               <div class="row-right">
                 ${price}
