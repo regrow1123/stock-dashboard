@@ -531,63 +531,103 @@
         const price = r.current_price != null
           ? fmtMoney(r.current_price, cur, { fraction: 2 })
           : '—';
+        const name = escapeHTML(r.name || r.ticker);
         return `
           <li>
-            <div class="row-item">
+            <button type="button" class="row-item" data-ticker="${escapeHTML(r.ticker)}"
+                    data-name="${name}"
+                    aria-label="${name} 매매내역 보기">
               <div>
-                <div class="row-title">${escapeHTML(r.name || r.ticker)}</div>
+                <div class="row-title">${name}</div>
                 <div class="row-sub">${escapeHTML(r.ticker)}</div>
               </div>
               <div class="row-right">
                 ${price}
                 <div class="row-sub"><span class="pill ${dcPill}">${dcText}</span></div>
               </div>
-            </div>
+            </button>
           </li>`;
       }).join('');
+      if (!list.dataset.wired) {
+        list.addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-ticker]');
+          if (!btn) return;
+          setTickerFilter(btn.dataset.ticker, btn.dataset.name);
+        });
+        list.dataset.wired = '1';
+      }
     }
 
   }
 
+  let allTrades = [];
+  let tickerFilter = null;      // ticker string when filtered
+  let tickerFilterName = null;  // display name
+
   async function renderAccountTrades() {
-    const rows = await getJSON(`/api/accounts/${window.ACCOUNT_ID}/trades?limit=20`);
+    allTrades = await getJSON(`/api/accounts/${window.ACCOUNT_ID}/trades?limit=200`);
+    redrawTrades();
+  }
+
+  function setTickerFilter(ticker, name) {
+    tickerFilter = ticker;
+    tickerFilterName = name || ticker;
+    redrawTrades();
+    document.getElementById('trades-heading')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function clearTickerFilter() {
+    tickerFilter = null;
+    tickerFilterName = null;
+    redrawTrades();
+  }
+
+  function redrawTrades() {
     const cur = window.ACCOUNT_CURRENCY;
+    const rows = tickerFilter
+      ? allTrades.filter((t) => t.ticker === tickerFilter)
+      : allTrades.slice(0, 20);
+    const banner = document.getElementById('trades-filter');
+    if (banner) {
+      if (tickerFilter) {
+        banner.innerHTML = `
+          <button type="button" class="trades-filter-chip" aria-label="필터 해제">
+            ${escapeHTML(tickerFilterName)} 만 보기
+            <span aria-hidden="true">×</span>
+          </button>`;
+        banner.hidden = false;
+        banner.querySelector('button').onclick = clearTickerFilter;
+      } else {
+        banner.innerHTML = '';
+        banner.hidden = true;
+      }
+    }
 
     const list = document.getElementById('trades-list');
     list.setAttribute('aria-busy', 'false');
     if (!rows.length) {
-      list.innerHTML = `<li class="row-item"><div><div class="row-title">거래 내역이 없습니다</div></div></li>`;
-    } else {
-      list.innerHTML = rows.map((t) => {
-        const pill = t.side === 'buy' ? 'pill-pos' : 'pill-neg';
-        return `
-          <li>
-            <div class="row-item">
-              <div>
-                <div class="row-title">${escapeHTML(t.name || t.ticker)}</div>
-                <div class="row-sub">
-                  <time datetime="${t.executed_at}">${t.executed_at}</time>
-                  · <span class="pill ${pill}">${t.side}</span>
-                  · ${t.quantity}주
-                </div>
+      const msg = tickerFilter ? `${tickerFilterName} 거래 내역 없음` : '거래 내역이 없습니다';
+      list.innerHTML = `<li class="row-item"><div><div class="row-title">${escapeHTML(msg)}</div></div></li>`;
+      return;
+    }
+    list.innerHTML = rows.map((t) => {
+      const pill = t.side === 'buy' ? 'pill-pos' : 'pill-neg';
+      return `
+        <li>
+          <div class="row-item">
+            <div>
+              <div class="row-title">${escapeHTML(t.name || t.ticker)}</div>
+              <div class="row-sub">
+                <time datetime="${t.executed_at}">${t.executed_at}</time>
+                · <span class="pill ${pill}">${t.side}</span>
+                · ${t.quantity}주
               </div>
-              <div class="row-right">${fmtMoney(t.price, cur, { fraction: 2 })}</div>
             </div>
-          </li>`;
-      }).join('');
-    }
-
-    const tbody = document.querySelector('#trades-table tbody');
-    if (tbody) {
-      tbody.innerHTML = rows.map((t) => `
-        <tr>
-          <td><time datetime="${t.executed_at}">${t.executed_at}</time></td>
-          <td>${escapeHTML(t.name || t.ticker)}<div class="row-sub">${escapeHTML(t.ticker)}</div></td>
-          <td><span class="pill ${t.side === 'buy' ? 'pill-pos' : 'pill-neg'}">${t.side}</span></td>
-          <td>${t.quantity}</td>
-          <td>${fmtMoney(t.price, cur, { fraction: 2 })}</td>
-        </tr>`).join('');
-    }
+            <div class="row-right">${fmtMoney(t.price, cur, { fraction: 2 })}</div>
+          </div>
+        </li>`;
+    }).join('');
   }
 
   function wireRangeTabs() {

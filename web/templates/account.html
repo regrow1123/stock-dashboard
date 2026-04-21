@@ -59,22 +59,8 @@
   <div class="section-heading">
     <h2 id="trades-heading">최근 매매</h2>
   </div>
-  <ul id="trades-list" class="row-list md:hidden" aria-busy="true" aria-label="최근 매매 목록"></ul>
-  <div class="table-wrap hidden md:block">
-    <table class="data" id="trades-table">
-      <caption class="sr-only">최근 매매 내역</caption>
-      <thead>
-        <tr>
-          <th scope="col">일자</th>
-          <th scope="col">종목</th>
-          <th scope="col">구분</th>
-          <th scope="col">수량</th>
-          <th scope="col">가격</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+  <div id="trades-filter" class="trades-filter" hidden></div>
+  <ul id="trades-list" class="row-list" aria-busy="true" aria-label="최근 매매 목록"></ul>
 </section>
 {% endblock %}
 

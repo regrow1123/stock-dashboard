@@ -544,6 +544,30 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* trades filter chip (active when a holding was clicked) */
+  .trades-filter {
+    margin: 0 0 0.5rem;
+  }
+  .trades-filter-chip {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 4px 10px 4px 12px;
+    background: var(--chart-card-border);
+    color: var(--chart-hero);
+    border: 0;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+  }
+  .trades-filter-chip span {
+    color: var(--chart-title);
+    font-size: 0.875rem;
+    line-height: 1;
+  }
+  .trades-filter-chip:hover span { color: var(--chart-hero); }
+
   /* SKEW sparkline (replaces dial for tail-risk trend) */
   .sk-spark {
     display: block;
