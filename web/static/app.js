@@ -534,13 +534,11 @@
             <div class="row-item">
               <div>
                 <div class="row-title">${escapeHTML(r.name || r.ticker)}</div>
-                <div class="row-sub">${escapeHTML(r.ticker)} · ${r.quantity}주 · 평단 ${fmtMoney(r.avg_price, cur, { fraction: 2 })}</div>
+                <div class="row-sub">${escapeHTML(r.ticker)}</div>
               </div>
               <div class="row-right">
-                ${fmtMoney(r.value, cur)}
-                <div class="row-sub">
-                  <span class="pill ${dcPill}">${dcText}</span>
-                </div>
+                <span class="pill ${dcPill}">${dcText}</span>
+                <div class="row-sub">${pctInt(weight)}</div>
               </div>
             </div>
           </li>`;
@@ -560,10 +558,7 @@
               ${escapeHTML(r.name || r.ticker)}
               <div class="row-sub">${escapeHTML(r.ticker)}</div>
             </td>
-            <td>${r.quantity}</td>
-            <td>${fmtMoney(r.avg_price, cur, { fraction: 2 })}</td>
             <td>${r.current_price != null ? fmtMoney(r.current_price, cur, { fraction: 2 }) : '—'}</td>
-            <td>${fmtMoney(r.value, cur)}</td>
             <td>${pctInt(weight)}</td>
             <td><span class="pill ${dcPill}">${dcText}</span></td>
           </tr>`;
