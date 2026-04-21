@@ -517,7 +517,6 @@
 
   async function renderAccountHoldings() {
     const rows = await getJSON(`/api/accounts/${window.ACCOUNT_ID}/holdings`);
-    const total = rows.reduce((s, r) => s + r.value, 0);
     const cur = window.ACCOUNT_CURRENCY;
 
     const list = document.getElementById('holdings-list');
@@ -526,10 +525,12 @@
       list.innerHTML = `<li class="row-item"><div><div class="row-title">보유 종목이 없습니다</div></div></li>`;
     } else {
       list.innerHTML = rows.map((r) => {
-        const weight = total > 0 ? r.value / total : 0;
         const dc = r.day_change_pct;
         const dcPill = dc == null ? 'pill-muted' : dc >= 0 ? 'pill-pos' : 'pill-neg';
         const dcText = dc == null ? '—' : pctStr(dc);
+        const price = r.current_price != null
+          ? fmtMoney(r.current_price, cur, { fraction: 2 })
+          : '—';
         return `
           <li>
             <div class="row-item">
@@ -538,8 +539,8 @@
                 <div class="row-sub">${escapeHTML(r.ticker)}</div>
               </div>
               <div class="row-right">
-                <span class="pill ${dcPill}">${dcText}</span>
-                <div class="row-sub">${pctInt(weight)}</div>
+                ${price}
+                <div class="row-sub"><span class="pill ${dcPill}">${dcText}</span></div>
               </div>
             </div>
           </li>`;
@@ -549,7 +550,6 @@
     const tbody = document.querySelector('#holdings-table tbody');
     if (tbody) {
       tbody.innerHTML = rows.map((r) => {
-        const weight = total > 0 ? r.value / total : 0;
         const dc = r.day_change_pct;
         const dcPill = dc == null ? 'pill-muted' : dc >= 0 ? 'pill-pos' : 'pill-neg';
         const dcText = dc == null ? '—' : pctStr(dc);
@@ -560,7 +560,6 @@
               <div class="row-sub">${escapeHTML(r.ticker)}</div>
             </td>
             <td>${r.current_price != null ? fmtMoney(r.current_price, cur, { fraction: 2 }) : '—'}</td>
-            <td>${pctInt(weight)}</td>
             <td><span class="pill ${dcPill}">${dcText}</span></td>
           </tr>`;
       }).join('');
