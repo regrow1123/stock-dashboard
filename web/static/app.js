@@ -547,23 +547,6 @@
       }).join('');
     }
 
-    const tbody = document.querySelector('#holdings-table tbody');
-    if (tbody) {
-      tbody.innerHTML = rows.map((r) => {
-        const dc = r.day_change_pct;
-        const dcPill = dc == null ? 'pill-muted' : dc >= 0 ? 'pill-pos' : 'pill-neg';
-        const dcText = dc == null ? '—' : pctStr(dc);
-        return `
-          <tr>
-            <td>
-              ${escapeHTML(r.name || r.ticker)}
-              <div class="row-sub">${escapeHTML(r.ticker)}</div>
-            </td>
-            <td>${r.current_price != null ? fmtMoney(r.current_price, cur, { fraction: 2 }) : '—'}</td>
-            <td><span class="pill ${dcPill}">${dcText}</span></td>
-          </tr>`;
-      }).join('');
-    }
   }
 
   async function renderAccountTrades() {
