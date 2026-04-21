@@ -236,6 +236,72 @@
     }[rating?.toLowerCase()] || rating || '';
   }
 
+  // Semicircle dial (CNN-style) for Fear & Greed.
+  //   left end = 0 (extreme fear), top = 50 (neutral), right end = 100 (extreme greed).
+  // Returns the HTML fragment for a single .sent-card.
+  function fgDialCard(fg) {
+    const score = Math.round(fg.score);
+    const prev  = fg.previous_close   != null ? Math.round(fg.previous_close)   : null;
+    const w     = fg.previous_1_week  != null ? Math.round(fg.previous_1_week)  : null;
+    const m     = fg.previous_1_month != null ? Math.round(fg.previous_1_month) : null;
+    const rating = fgRatingKo(fg.rating);
+
+    // geometry — match the SVG viewBox below
+    const cx = 120, cy = 110, r = 95;
+    const polar = (v) => {
+      const a = Math.PI * (1 - Math.max(0, Math.min(100, v)) / 100);
+      return { x: cx + r * Math.cos(a), y: cy - r * Math.sin(a) };
+    };
+    const dot = (v, label, cls) => {
+      if (v == null) return '';
+      const { x, y } = polar(v);
+      return `<g class="fg-hist ${cls}">
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5"></circle>
+        <text x="${x.toFixed(1)}" y="${(y - 9).toFixed(1)}" text-anchor="middle">${label} ${v}</text>
+      </g>`;
+    };
+    const needleEnd = polar(score);
+    const tick = (v) => {
+      const inner = polar(v);
+      const a = Math.PI * (1 - v / 100);
+      const ox = cx + (r + 6) * Math.cos(a);
+      const oy = cy - (r + 6) * Math.sin(a);
+      return `<line x1="${inner.x.toFixed(1)}" y1="${inner.y.toFixed(1)}" x2="${ox.toFixed(1)}" y2="${oy.toFixed(1)}"></line>`;
+    };
+
+    return `
+      <div class="sent-card fg-dial-card">
+        <div class="sent-head">
+          <span class="sent-lbl">CNN Fear &amp; Greed</span>
+          <span class="sent-score">${score}<span class="sent-rating"> · ${escapeHTML(rating)}</span></span>
+        </div>
+        <svg class="fg-dial" viewBox="0 0 240 140" role="img"
+             aria-label="Fear and Greed ${score} out of 100, ${escapeHTML(rating)}">
+          <defs>
+            <linearGradient id="fg-arc-grad" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0"    stop-color="#dc2626"/>
+              <stop offset="0.3"  stop-color="#f59e0b"/>
+              <stop offset="0.5"  stop-color="#facc15"/>
+              <stop offset="0.7"  stop-color="#84cc16"/>
+              <stop offset="1"    stop-color="#16a34a"/>
+            </linearGradient>
+          </defs>
+          <path class="fg-arc-bg"
+                d="M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}"/>
+          <path class="fg-arc"
+                d="M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}"/>
+          ${[0, 25, 50, 75, 100].map(tick).join('')}
+          ${dot(m,    '1달',  'fg-hist-m')}
+          ${dot(w,    '1주',  'fg-hist-w')}
+          ${dot(prev, '어제', 'fg-hist-p')}
+          <line class="fg-needle"
+                x1="${cx}" y1="${cy}"
+                x2="${needleEnd.x.toFixed(1)}" y2="${needleEnd.y.toFixed(1)}"/>
+          <circle class="fg-hub" cx="${cx}" cy="${cy}" r="4"/>
+        </svg>
+      </div>`;
+  }
+
   function skewLabel(score) {
     if (score == null) return '';
     if (score < 115) return '낮음';
@@ -257,28 +323,7 @@
     const cards = [];
     const fg = data.fear_and_greed;
     if (fg && fg.score != null) {
-      const score = Math.round(fg.score);
-      const prev = fg.previous_close != null ? Math.round(fg.previous_close) : null;
-      const w = fg.previous_1_week != null ? Math.round(fg.previous_1_week) : null;
-      const m = fg.previous_1_month != null ? Math.round(fg.previous_1_month) : null;
-      const rating = fgRatingKo(fg.rating);
-      cards.push(`
-        <div class="sent-card">
-          <div class="sent-head">
-            <span class="sent-lbl">CNN Fear &amp; Greed</span>
-            <span class="sent-score">${score}<span class="sent-rating"> · ${escapeHTML(rating)}</span></span>
-          </div>
-          <div class="sent-gauge sent-gauge-fg" aria-label="${score} / 100">
-            <div class="sent-track"></div>
-            ${prev != null ? `<div class="sent-prev" style="left:${prev}%" title="어제 ${prev}"></div>` : ''}
-            <div class="sent-marker" style="left:${score}%"></div>
-          </div>
-          <div class="sent-meta">
-            <span>1달 ${m ?? '—'}</span>
-            <span>1주 ${w ?? '—'}</span>
-            <span>어제 ${prev ?? '—'}</span>
-          </div>
-        </div>`);
+      cards.push(fgDialCard(fg));
     }
     const sk = data.skew;
     if (sk && sk.score != null) {
