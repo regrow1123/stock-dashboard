@@ -274,9 +274,9 @@
             <div class="sent-marker" style="left:${score}%"></div>
           </div>
           <div class="sent-meta">
-            <span>어제 ${prev ?? '—'}</span>
-            <span>1주 ${w ?? '—'}</span>
             <span>1달 ${m ?? '—'}</span>
+            <span>1주 ${w ?? '—'}</span>
+            <span>어제 ${prev ?? '—'}</span>
           </div>
         </div>`);
     }
