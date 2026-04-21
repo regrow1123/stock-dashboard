@@ -526,6 +526,7 @@
       list.innerHTML = `<li class="row-item"><div><div class="row-title">보유 종목이 없습니다</div></div></li>`;
     } else {
       list.innerHTML = rows.map((r) => {
+        const weight = total > 0 ? r.value / total : 0;
         const dc = r.day_change_pct;
         const dcPill = dc == null ? 'pill-muted' : dc >= 0 ? 'pill-pos' : 'pill-neg';
         const dcText = dc == null ? '—' : pctStr(dc);
