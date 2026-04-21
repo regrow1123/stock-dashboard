@@ -463,11 +463,9 @@
     white-space: nowrap;
   }
 
-  /* sentiment block under the market ticker */
+  /* sentiment block — now lives inside <main>, scrolls with content */
   .sentiment {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 0 1rem 0.75rem;
+    margin-bottom: 1rem;
   }
   .sent-card {
     border: 1px solid var(--chart-card-border);
@@ -476,10 +474,11 @@
     background: var(--chart-card-bg);
     font-family: var(--font-mono);
   }
+  .sent-card + .sent-card { margin-top: 0.5rem; }
   .sent-head {
     display: flex; justify-content: space-between; align-items: baseline;
     font-size: 0.6875rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
   }
   .sent-lbl {
     color: var(--chart-title);
@@ -498,40 +497,8 @@
     font-size: 0.6875rem;
     font-weight: 500;
   }
-  .sent-gauge {
-    position: relative;
-    height: 6px;
-    margin: 4px 0 6px;
-  }
-  .sent-track {
-    position: absolute; inset: 0;
-    border-radius: 999px;
-    opacity: 0.55;
-  }
-  .sent-gauge-fg .sent-track {
-    background: linear-gradient(
-      90deg,
-      #dc2626 0%,    /* extreme fear */
-      #f59e0b 30%,
-      #facc15 50%,   /* neutral */
-      #84cc16 70%,
-      #16a34a 100%   /* extreme greed */
-    );
-  }
-  .sent-gauge-skew .sent-track {
-    /* low SKEW = calm (green); high SKEW = elevated tail risk (red) */
-    background: linear-gradient(
-      90deg,
-      #16a34a 0%,
-      #84cc16 30%,
-      #facc15 55%,
-      #f59e0b 75%,
-      #dc2626 100%
-    );
-  }
-  .sentiment .sent-card + .sent-card { margin-top: 0.5rem; }
 
-  /* F&G semicircle dial */
+  /* Semicircle dial (F&G, SKEW) */
   .fg-dial {
     display: block;
     width: 100%;
@@ -549,19 +516,21 @@
   }
   .fg-arc {
     fill: none;
-    stroke: url(#fg-arc-grad);
     stroke-width: 14;
     stroke-linecap: round;
     opacity: 0.85;
   }
   .fg-dial line { stroke: var(--chart-axis); stroke-width: 0.75; opacity: 0.4; }
   .fg-needle {
-    stroke: var(--chart-hero) !important;
-    stroke-width: 2 !important;
-    stroke-linecap: round;
-    opacity: 1 !important;
+    fill: var(--chart-hero);
+    stroke: none;
+    opacity: 1;
   }
-  .fg-hub { fill: var(--chart-hero); }
+  .fg-hub {
+    fill: var(--chart-card-bg);
+    stroke: var(--chart-hero);
+    stroke-width: 1.5;
+  }
   .fg-hist circle {
     fill: var(--chart-card-bg);
     stroke: var(--chart-hero);

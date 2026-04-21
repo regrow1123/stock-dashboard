@@ -236,70 +236,109 @@
     }[rating?.toLowerCase()] || rating || '';
   }
 
-  // Semicircle dial (CNN-style) for Fear & Greed.
-  //   left end = 0 (extreme fear), top = 50 (neutral), right end = 100 (extreme greed).
-  // Returns the HTML fragment for a single .sent-card.
-  function fgDialCard(fg) {
-    const score = Math.round(fg.score);
-    const prev  = fg.previous_close   != null ? Math.round(fg.previous_close)   : null;
-    const w     = fg.previous_1_week  != null ? Math.round(fg.previous_1_week)  : null;
-    const m     = fg.previous_1_month != null ? Math.round(fg.previous_1_month) : null;
-    const rating = fgRatingKo(fg.rating);
-
-    // geometry — match the SVG viewBox below
+  // Semicircle dial (CNN-style). One shared component, used for both F&G
+  // (0..100, red→green) and SKEW (100..160, green→red).
+  function dialCard({ title, ariaLabel, score, scoreFmt, rating, lo, hi,
+                       gradientId, ticks, reversed, history, scoreDecimals = 0 }) {
     const cx = 120, cy = 110, r = 95;
+    const clamp = (v) => Math.max(lo, Math.min(hi, v));
     const polar = (v) => {
-      const a = Math.PI * (1 - Math.max(0, Math.min(100, v)) / 100);
-      return { x: cx + r * Math.cos(a), y: cy - r * Math.sin(a) };
+      const t = (clamp(v) - lo) / (hi - lo);
+      const a = Math.PI * (1 - t);
+      return { x: cx + r * Math.cos(a), y: cy - r * Math.sin(a), a };
     };
-    const dot = (v, label, cls) => {
-      if (v == null) return '';
-      const { x, y } = polar(v);
-      return `<g class="fg-hist ${cls}">
-        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5"></circle>
-        <text x="${x.toFixed(1)}" y="${(y - 9).toFixed(1)}" text-anchor="middle">${label} ${v}</text>
-      </g>`;
-    };
-    const needleEnd = polar(score);
-    const tick = (v) => {
+    const tickLine = (v) => {
       const inner = polar(v);
-      const a = Math.PI * (1 - v / 100);
-      const ox = cx + (r + 6) * Math.cos(a);
-      const oy = cy - (r + 6) * Math.sin(a);
+      const ox = cx + (r + 6) * Math.cos(inner.a);
+      const oy = cy - (r + 6) * Math.sin(inner.a);
       return `<line x1="${inner.x.toFixed(1)}" y1="${inner.y.toFixed(1)}" x2="${ox.toFixed(1)}" y2="${oy.toFixed(1)}"></line>`;
     };
+    const histDot = (entry) => {
+      const { value, label } = entry;
+      if (value == null) return '';
+      const { x, y } = polar(value);
+      const text = `${label} ${value.toFixed(scoreDecimals)}`;
+      return `<g class="fg-hist">
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5"></circle>
+        <text x="${x.toFixed(1)}" y="${(y - 9).toFixed(1)}" text-anchor="middle">${escapeHTML(text)}</text>
+      </g>`;
+    };
+    // tapered needle: triangle from hub (wide) to tip (sharp)
+    const needle = polar(score);
+    const baseHalf = 5;
+    const pdx = Math.sin(needle.a);
+    const pdy = Math.cos(needle.a);
+    const bx1 = (cx + baseHalf * pdx).toFixed(1);
+    const by1 = (cy + baseHalf * pdy).toFixed(1);
+    const bx2 = (cx - baseHalf * pdx).toFixed(1);
+    const by2 = (cy - baseHalf * pdy).toFixed(1);
+
+    const stops = reversed
+      ? [['0','#16a34a'],['0.3','#84cc16'],['0.55','#facc15'],['0.75','#f59e0b'],['1','#dc2626']]
+      : [['0','#dc2626'],['0.3','#f59e0b'],['0.5','#facc15'],['0.7','#84cc16'],['1','#16a34a']];
 
     return `
       <div class="sent-card fg-dial-card">
         <div class="sent-head">
-          <span class="sent-lbl">CNN Fear &amp; Greed</span>
-          <span class="sent-score">${score}<span class="sent-rating"> · ${escapeHTML(rating)}</span></span>
+          <span class="sent-lbl">${escapeHTML(title)}</span>
+          <span class="sent-score">${escapeHTML(scoreFmt)}<span class="sent-rating"> · ${escapeHTML(rating)}</span></span>
         </div>
-        <svg class="fg-dial" viewBox="0 0 240 140" role="img"
-             aria-label="Fear and Greed ${score} out of 100, ${escapeHTML(rating)}">
+        <svg class="fg-dial" viewBox="0 0 240 140" role="img" aria-label="${escapeHTML(ariaLabel)}">
           <defs>
-            <linearGradient id="fg-arc-grad" x1="0" x2="1" y1="0" y2="0">
-              <stop offset="0"    stop-color="#dc2626"/>
-              <stop offset="0.3"  stop-color="#f59e0b"/>
-              <stop offset="0.5"  stop-color="#facc15"/>
-              <stop offset="0.7"  stop-color="#84cc16"/>
-              <stop offset="1"    stop-color="#16a34a"/>
+            <linearGradient id="${gradientId}" x1="0" x2="1" y1="0" y2="0">
+              ${stops.map(([o,c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}
             </linearGradient>
           </defs>
           <path class="fg-arc-bg"
                 d="M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}"/>
-          <path class="fg-arc"
+          <path class="fg-arc" style="stroke: url(#${gradientId})"
                 d="M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}"/>
-          ${[0, 25, 50, 75, 100].map(tick).join('')}
-          ${dot(m,    '1달',  'fg-hist-m')}
-          ${dot(w,    '1주',  'fg-hist-w')}
-          ${dot(prev, '어제', 'fg-hist-p')}
-          <line class="fg-needle"
-                x1="${cx}" y1="${cy}"
-                x2="${needleEnd.x.toFixed(1)}" y2="${needleEnd.y.toFixed(1)}"/>
-          <circle class="fg-hub" cx="${cx}" cy="${cy}" r="4"/>
+          ${ticks.map(tickLine).join('')}
+          ${history.map(histDot).join('')}
+          <polygon class="fg-needle"
+                   points="${needle.x.toFixed(1)},${needle.y.toFixed(1)} ${bx1},${by1} ${bx2},${by2}"/>
+          <circle class="fg-hub" cx="${cx}" cy="${cy}" r="5"/>
         </svg>
       </div>`;
+  }
+
+  function fgDialCard(fg) {
+    const score = Math.round(fg.score);
+    return dialCard({
+      title: 'CNN Fear & Greed',
+      ariaLabel: `Fear and Greed ${score} of 100, ${fgRatingKo(fg.rating)}`,
+      score,
+      scoreFmt: String(score),
+      rating: fgRatingKo(fg.rating),
+      lo: 0, hi: 100,
+      gradientId: 'fg-arc-grad',
+      ticks: [0, 25, 50, 75, 100],
+      reversed: false,
+      history: [
+        { value: fg.previous_1_month != null ? Math.round(fg.previous_1_month) : null, label: '1달' },
+        { value: fg.previous_1_week  != null ? Math.round(fg.previous_1_week)  : null, label: '1주' },
+        { value: fg.previous_close   != null ? Math.round(fg.previous_close)   : null, label: '어제' },
+      ],
+      scoreDecimals: 0,
+    });
+  }
+
+  function skewDialCard(sk) {
+    return dialCard({
+      title: 'CBOE SKEW · 꼬리위험',
+      ariaLabel: `SKEW ${sk.score.toFixed(1)}, ${skewLabel(sk.score)}`,
+      score: sk.score,
+      scoreFmt: sk.score.toFixed(1),
+      rating: skewLabel(sk.score),
+      lo: 100, hi: 160,
+      gradientId: 'skew-arc-grad',
+      ticks: [100, 115, 130, 145, 160],
+      reversed: true,
+      history: [
+        { value: sk.previous_close, label: '어제' },
+      ],
+      scoreDecimals: 1,
+    });
   }
 
   function skewLabel(score) {
@@ -327,29 +366,7 @@
     }
     const sk = data.skew;
     if (sk && sk.score != null) {
-      // gauge range 100..160 (covers normal market activity)
-      const SK_LO = 100, SK_HI = 160;
-      const pct = (v) => Math.max(0, Math.min(100, ((v - SK_LO) / (SK_HI - SK_LO)) * 100));
-      const score = sk.score.toFixed(1);
-      const prev = sk.previous_close;
-      const label = skewLabel(sk.score);
-      cards.push(`
-        <div class="sent-card">
-          <div class="sent-head">
-            <span class="sent-lbl">CBOE SKEW · 꼬리위험</span>
-            <span class="sent-score">${score}<span class="sent-rating"> · ${escapeHTML(label)}</span></span>
-          </div>
-          <div class="sent-gauge sent-gauge-skew" aria-label="${score}">
-            <div class="sent-track"></div>
-            ${prev != null ? `<div class="sent-prev" style="left:${pct(prev)}%" title="어제 ${prev.toFixed(1)}"></div>` : ''}
-            <div class="sent-marker" style="left:${pct(sk.score)}%"></div>
-          </div>
-          <div class="sent-meta">
-            <span>${SK_LO}</span>
-            <span>어제 ${prev != null ? prev.toFixed(1) : '—'}</span>
-            <span>${SK_HI}</span>
-          </div>
-        </div>`);
+      cards.push(skewDialCard(sk));
     }
     host.innerHTML = cards.join('');
   }
