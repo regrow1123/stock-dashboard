@@ -7,7 +7,7 @@ services:
     environment:
       HOME: /home/appuser
     ports:
-      - "127.0.0.1:8090:8080"
+      - "0.0.0.0:8090:8080"
     volumes:
       - ./data:/app/data
       - ./seed:/app/seed:ro
