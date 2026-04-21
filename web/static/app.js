@@ -474,36 +474,12 @@
   async function renderAccount() {
     applyChartDefaults();
     await Promise.all([
-      renderAccountHero(),
       renderAccountWeights(),
       renderAccountHoldings(),
       renderAccountTrades(),
       renderAccountHistory(currentRange),
     ]);
     wireRangeTabs();
-  }
-
-  async function renderAccountHero() {
-    const hero = document.getElementById('hero');
-    const s = await getJSON('/api/summary');
-    const row = (s.accounts || []).find((a) => a.account_id === window.ACCOUNT_ID);
-    hero.setAttribute('aria-busy', 'false');
-    if (!row) {
-      hero.innerHTML = `<div class="label">데이터 없음</div>`;
-      return;
-    }
-    const cur = row.currency;
-    const pillCls = row.pct_return >= 0 ? 'pill-pos' : 'pill-neg';
-    hero.innerHTML = `
-      <div class="flex items-baseline justify-between gap-3">
-        <span class="label">평가</span>
-        <span class="pill ${pillCls}">${pctStr(row.pct_return)}</span>
-      </div>
-      <div class="hero-number mt-1">${fmtMoney(row.value, cur)}</div>
-      <div class="kv mt-3"><span>원가</span><strong>${fmtMoney(row.cost, cur)}</strong></div>
-      <div class="kv mt-1"><span>평가손익</span>
-        <strong class="${row.pnl >= 0 ? 'pos' : 'neg'}">${signedMoney(row.pnl, cur)}</strong>
-      </div>`;
   }
 
   async function renderAccountWeights() {
