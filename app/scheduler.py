@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.benchmarks import BENCHMARK_FOR_CURRENCY, backfill_benchmark
 from app.models import Account, SeedHolding, Trade
-from app.prices import refresh_live_prices
+from app.prices import backfill_held_prices, refresh_live_prices
 from app.snapshots import recompute_snapshots
 
 
@@ -43,9 +43,19 @@ def benchmarks_job(session_factory) -> None:
         from app.api import MARKET_TICKERS
         tickers = {BENCHMARK_FOR_CURRENCY.get(a.currency) for a in db.query(Account).all()}
         tickers.discard(None)
-        tickers |= {tk for tk, _ in MARKET_TICKERS}
+        tickers |= {tk for tk, _, _ in MARKET_TICKERS}
         for tk in tickers:
             backfill_benchmark(db, ticker=tk, start=start, end=today + timedelta(days=1))
+    finally:
+        if hasattr(db, "close"):
+            db.close()
+
+
+def backfill_prices_job(session_factory) -> None:
+    db: Session = session_factory()
+    try:
+        today = date.today()
+        backfill_held_prices(db, from_date=today - timedelta(days=7), to_date=today)
     finally:
         if hasattr(db, "close"):
             db.close()
@@ -59,6 +69,11 @@ def make_scheduler(session_factory) -> BackgroundScheduler:
                   id="daily_snapshot", max_instances=1)
     sched.add_job(benchmarks_job, "cron", hour=23, minute=45, args=[session_factory],
                   id="benchmarks", max_instances=1)
+    # Held-ticker daily close backfill: after KR close (16:30 KST) and after US close (06:30 KST).
+    sched.add_job(backfill_prices_job, "cron", hour=16, minute=30, args=[session_factory],
+                  id="backfill_prices_kr", max_instances=1, coalesce=True)
+    sched.add_job(backfill_prices_job, "cron", hour=6, minute=30, args=[session_factory],
+                  id="backfill_prices_us", max_instances=1, coalesce=True)
     from app.config import get_settings
     from app.telegram import poll_updates_job
     if get_settings().tg_polling:

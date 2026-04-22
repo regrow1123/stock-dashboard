@@ -5,7 +5,7 @@ import pandas as pd
 import yfinance as yf
 from sqlalchemy.orm import Session
 
-from app.models import LivePrice, Price
+from app.models import Account, LivePrice, Price, SeedHolding, Trade
 
 
 def _close_series(df: "pd.DataFrame", ticker: str) -> "pd.Series":
@@ -73,6 +73,25 @@ def refresh_live_prices(
         n += 1
     db.commit()
     return n
+
+
+def backfill_held_prices(
+    session: Session, *, from_date: date, to_date: date
+) -> None:
+    tickers_by_currency: dict[str, set[str]] = {}
+    for sh in session.query(SeedHolding).all():
+        acc = session.get(Account, sh.account_id)
+        tickers_by_currency.setdefault(acc.currency, set()).add(sh.ticker)
+    for t in session.query(Trade).all():
+        acc = session.get(Account, t.account_id)
+        tickers_by_currency.setdefault(acc.currency, set()).add(t.ticker)
+    end_exclusive = to_date + timedelta(days=1)
+    for currency, tickers in tickers_by_currency.items():
+        for tk in tickers:
+            backfill_prices(
+                session, ticker=tk, currency=currency,
+                start=from_date, end=end_exclusive,
+            )
 
 
 def close_on_or_before(db: Session, ticker: str, d: date) -> float | None:
