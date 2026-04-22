@@ -96,14 +96,38 @@ def account_weights(account_id: str, db: Session = Depends(get_db)):
     yesterday = date.today() - timedelta(days=1)
     weights = weights_from_values({r["ticker"]: r["value"] for r in rows})
 
-    # yesterday's weights — use today's quantities × prev close. If a
-    # ticker has no prev_close we exclude it from the prev total to avoid
-    # skewing the denominator (and its weight_change is null).
-    prev_values = {}
-    for r in rows:
-        prev = close_on_or_before(db, r["ticker"], yesterday)
+    # yesterday's weights must use yesterday's quantities (replay trades
+    # only up to `yesterday`), otherwise same-day buys/sells get hidden:
+    # a buy that increases qty would inflate both numerator and denominator
+    # by the same amount and the resulting weight_change would only reflect
+    # price drift. If a ticker has no prev_close we exclude it from the
+    # prev total to avoid skewing the denominator.
+    seeds = {
+        sh.ticker: sh
+        for sh in db.query(SeedHolding).filter_by(account_id=account_id).all()
+    }
+    trades_yest: dict[str, list[Trade]] = {}
+    for t in (
+        db.query(Trade)
+        .filter_by(account_id=account_id)
+        .filter(Trade.executed_at <= yesterday)
+        .order_by(Trade.executed_at)
+        .all()
+    ):
+        trades_yest.setdefault(t.ticker, []).append(t)
+    prev_values: dict[str, float] = {}
+    for tk in set(seeds) | set(trades_yest):
+        seed = seeds.get(tk)
+        qty_yest, _ = avg_cost_from_seed_and_trades(
+            seed.quantity if seed else 0.0,
+            seed.avg_price if seed else 0.0,
+            trades_yest.get(tk, []),
+        )
+        if qty_yest <= 0:
+            continue
+        prev = close_on_or_before(db, tk, yesterday)
         if prev is not None:
-            prev_values[r["ticker"]] = r["quantity"] * prev
+            prev_values[tk] = qty_yest * prev
     prev_total = sum(prev_values.values())
     prev_weights = {
         tk: v / prev_total for tk, v in prev_values.items()
