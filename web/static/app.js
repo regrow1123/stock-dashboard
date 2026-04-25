@@ -27,12 +27,8 @@
   const pctStr = (n) => (n >= 0 ? '+' : '') + (n * 100).toFixed(2) + '%';
   const pctInt = (n) => (n * 100).toFixed(1) + '%';
 
-  const monthLabel = (iso) => {
-    // iso = 'YYYY-MM-DD' -> '4월' (1Y range)
-    const [, m] = iso.split('-');
-    return `${parseInt(m, 10)}월`;
-  };
   const shortDate = (iso) => iso.slice(2, 7); // 'YY-MM'
+  const monthDay = (iso) => iso.slice(5, 10); // 'MM-DD'
 
   const timeLabel = (date = new Date()) =>
     date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -820,7 +816,7 @@
     // x-label strip: 4 evenly spaced points
     const xWrap = document.getElementById('history-xlabels');
     if (xWrap) {
-      const fmt = currentRange === '1Y' ? monthLabel : shortDate;
+      const fmt = currentRange === '1M' ? monthDay : shortDate;
       const n = allDates.length;
       if (n === 0) {
         xWrap.innerHTML = '';
