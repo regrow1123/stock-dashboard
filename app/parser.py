@@ -32,7 +32,7 @@ Today is {today}. If the message uses relative dates like "오늘"/"어제", res
 
 Return ONLY a compact JSON object (no prose, no markdown fences) matching:
 {{
-  "type": "trade" | "dividend" | "unknown",
+  "type": "trade" | "dividend" | "cancel" | "unknown",
   "account": "<one of allowed account id>" | null,
   "ticker": "<KR: 6-digit code with .KS or .KQ suffix; US: uppercase symbol>" | null,
   "side": "buy" | "sell" | null,
@@ -44,6 +44,15 @@ Return ONLY a compact JSON object (no prose, no markdown fences) matching:
   "confidence": 0.0..1.0,
   "note": "<short reasoning>"
 }}
+
+Use type="cancel" when the user wants to undo or delete their most
+recently submitted entry. Examples that map to cancel:
+  - "방금 보낸 메시지 취소해줘"
+  - "마지막 거래 취소"
+  - "방금 거 잘못 입력했어 빼줘"
+  - "직전 기록 삭제"
+For cancel, set other fields to null and confidence to 0.95+ when the
+intent is unambiguous.
 
 Message:
 {message}

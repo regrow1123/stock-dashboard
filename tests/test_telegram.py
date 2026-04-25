@@ -159,6 +159,40 @@ def test_polling_processes_new_update_and_stores_offset(db, monkeypatch):
     assert db.get(Meta, "tg_offset").value == "77"
 
 
+def test_cancel_intent_deletes_latest_trade_after_confirm(db, engine, monkeypatch):
+    db.add(Account(id="kakao_us", name="카카오 종합", broker="카카오",
+                   currency="USD", display_order=1))
+    db.add(Trade(account_id="kakao_us", ticker="AAPL", side="buy",
+                 quantity=5, price=190, executed_at=date(2026, 4, 24),
+                 raw_text="prev", tg_message_id=10))
+    db.commit()
+    sent = _install(monkeypatch, engine)
+
+    def fake_parse(message, accounts, today):
+        from app.parser import ParseResult
+        return ParseResult(
+            type="cancel", account=None, ticker=None, side=None,
+            quantity=None, price=None, amount=None,
+            executed_at=None, paid_at=None,
+            confidence=0.97, note="cancel", raw={},
+        )
+    monkeypatch.setattr("app.telegram.parse_message", fake_parse)
+
+    app = create_app(engine=engine, start_scheduler=False)
+    c = TestClient(app)
+    c.post("/telegram/webhook", json=_payload("방금 보낸 메시지 취소해줘", message_id=11),
+           headers={"X-Telegram-Bot-Api-Secret-Token": "s"})
+    assert db.query(PendingConfirm).count() == 1
+    assert db.query(Trade).count() == 1  # not yet deleted
+    assert any("취소할까요" in m["text"] for m in sent)
+
+    c.post("/telegram/webhook", json=_payload("예", message_id=12),
+           headers={"X-Telegram-Bot-Api-Secret-Token": "s"})
+    assert db.query(Trade).count() == 0
+    assert db.query(PendingConfirm).count() == 0
+    assert any("삭제" in m["text"] for m in sent)
+
+
 def test_high_confidence_trade_null_account_goes_to_pending(db, engine, monkeypatch):
     """High-confidence trade with account=None must route to PendingConfirm, not Trade."""
     db.add(Account(id="mirae_kr", name="미래에셋 국내", broker="미래에셋",

@@ -118,18 +118,55 @@ def handle_message(db: Session, msg: dict) -> None:
             .first()
         )
         if pending is not None:
-            if text.strip().lower() in {"예", "네", "yes", "y"}:
-                from app.parser import ParseResult
-                d = json.loads(pending.payload_json)
-                p = ParseResult(
-                    **{**d,
-                       "executed_at": date.fromisoformat(d["executed_at"]) if d.get("executed_at") else None,
-                       "paid_at": date.fromisoformat(d["paid_at"]) if d.get("paid_at") else None}
-                )
-                _save_and_recompute(db, p, tg_message_id, "(confirmed)")
-                send_reply(chat_id, _success_text(p), reply_to=tg_message_id)
+            payload = json.loads(pending.payload_json)
+            action = payload.get("action", "save")
+            confirmed = text.strip().lower() in {"예", "네", "yes", "y"}
+            if action == "cancel":
+                if confirmed:
+                    trade = db.get(Trade, payload["trade_id"])
+                    if trade is None:
+                        send_reply(chat_id, "⚠️ 이미 삭제된 기록입니다.", reply_to=tg_message_id)
+                    else:
+                        executed = trade.executed_at
+                        account_id = trade.account_id
+                        side_ko = _SIDE_KO.get(trade.side, trade.side)
+                        summary = (
+                            f"{side_ko} {trade.ticker} {trade.quantity}@{trade.price} "
+                            f"({trade.account_id})"
+                        )
+                        db.delete(trade)
+                        db.commit()
+                        recompute_snapshots(
+                            db, from_date=executed, to_date=date.today(),
+                            account_id=account_id,
+                        )
+                        send_reply(chat_id, f"🗑️ 삭제: {summary}", reply_to=tg_message_id)
+                else:
+                    send_reply(chat_id, "👍 유지합니다.", reply_to=tg_message_id)
             else:
-                send_reply(chat_id, "👍 취소했습니다.", reply_to=tg_message_id)
+                if confirmed:
+                    from app.parser import ParseResult
+                    raw_text = payload.pop("_raw_text", "(confirmed)")
+                    p = ParseResult(
+                        type=payload.get("type", "trade"),
+                        account=payload.get("account"),
+                        ticker=payload.get("ticker"),
+                        side=payload.get("side"),
+                        quantity=payload.get("quantity"),
+                        price=payload.get("price"),
+                        amount=payload.get("amount"),
+                        executed_at=date.fromisoformat(payload["executed_at"])
+                        if payload.get("executed_at") else None,
+                        paid_at=date.fromisoformat(payload["paid_at"])
+                        if payload.get("paid_at") else None,
+                        confidence=float(payload.get("confidence", 1.0)),
+                        note=payload.get("note", ""),
+                        raw={},
+                    )
+                    _save_and_recompute(db, p, tg_message_id, raw_text)
+                    send_reply(chat_id, _success_text(p), reply_to=tg_message_id)
+                else:
+                    send_reply(chat_id, "👍 취소했습니다.", reply_to=tg_message_id)
             db.delete(pending)
             db.commit()
         return
@@ -139,6 +176,30 @@ def handle_message(db: Session, msg: dict) -> None:
         for a in db.query(Account).order_by(Account.display_order).all()
     ]
     parsed = parse_message(text, accounts=accounts, today=date.today())
+
+    # Cancel intent: queue a confirmation that points at the most recent Trade.
+    if parsed.type == "cancel" and parsed.confidence >= CONFIDENCE_THRESHOLD:
+        latest = db.query(Trade).order_by(Trade.id.desc()).first()
+        if latest is None:
+            send_reply(chat_id, "취소할 기록이 없습니다.", reply_to=tg_message_id)
+            return
+        side_ko = _SIDE_KO.get(latest.side, latest.side)
+        summary = (
+            f"{side_ko} {latest.ticker} {latest.quantity}@{latest.price} "
+            f"({latest.account_id}, {latest.executed_at})"
+        )
+        cancel_payload = {"action": "cancel", "trade_id": latest.id, "summary": summary}
+        db.add(PendingConfirm(
+            tg_message_id=tg_message_id,
+            payload_json=json.dumps(cancel_payload, ensure_ascii=False),
+        ))
+        db.commit()
+        send_reply(
+            chat_id,
+            f"❓ 가장 최근 기록을 취소할까요?\n- {summary}\n(예/아니오)",
+            reply_to=tg_message_id,
+        )
+        return
 
     # Route to pending if confidence is low, type is unknown, or required fields are missing
     def _needs_confirm(p) -> bool:
