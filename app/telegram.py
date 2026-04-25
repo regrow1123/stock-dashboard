@@ -1,6 +1,6 @@
 import json
 from dataclasses import asdict
-from datetime import date
+from datetime import date, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -10,6 +10,7 @@ from app.api import get_db
 from app.config import get_settings
 from app.models import Account, Dividend, Meta, PendingConfirm, Trade
 from app.parser import parse_message
+from app.prices import backfill_prices, refresh_live_prices
 from app.snapshots import recompute_snapshots
 
 router = APIRouter()
@@ -68,9 +69,26 @@ def _save_and_recompute(db: Session, p, tg_message_id: int, raw_text: str) -> No
             )
         )
         db.commit()
-        from datetime import date as _date
+        # New tickers won't show day_change until prices exist. Fetch
+        # synchronously here so the dashboard reflects the trade right
+        # away; failures are non-fatal because the trade is already saved.
+        acc = db.get(Account, p.account)
+        if acc is not None:
+            today = date.today()
+            try:
+                backfill_prices(
+                    db, ticker=p.ticker, currency=acc.currency,
+                    start=p.executed_at - timedelta(days=14),
+                    end=today + timedelta(days=1),
+                )
+            except Exception:
+                pass
+            try:
+                refresh_live_prices(db, tickers=[p.ticker])
+            except Exception:
+                pass
         recompute_snapshots(
-            db, from_date=p.executed_at, to_date=_date.today(),
+            db, from_date=p.executed_at, to_date=date.today(),
             account_id=p.account,
         )
     elif p.type == "dividend":
