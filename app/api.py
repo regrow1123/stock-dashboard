@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -27,24 +28,31 @@ def _name_map(db: Session) -> dict[str, str]:
     return {i.ticker: i.name for i in db.query(Instrument).all()}
 
 
+_KST = ZoneInfo("Asia/Seoul")
+_ET = ZoneInfo("America/New_York")
+
+
 def _effective_today(currency: str, now: datetime | None = None) -> date:
     """Trading day used as 'today' for day-change calculations.
 
-    Resets ~1h before market open (server TZ = Asia/Seoul):
-      KRW → 08:00 KST (KOSPI opens 09:00)
-      else → 21:30 KST (US opens 22:30 KST during DST)
+    Resets ~1h before market open:
+      KRW → 08:00 KST (KOSPI opens 09:00; KR has no DST)
+      else → 08:30 AM ET, which is 21:30 KST during EDT and 22:30 KST
+             during EST — handled automatically via zoneinfo.
 
     Before the cutoff we treat the calendar yesterday as 'today' so the
     previous trading session's full-day change keeps showing overnight,
     and the table only resets to ~0% in the hour before market open.
     """
-    n = now or datetime.now()
+    n = now or datetime.now(_KST)
+    if n.tzinfo is None:
+        n = n.replace(tzinfo=_KST)
+    n_kst = n.astimezone(_KST)
+    today = n_kst.date()
     if currency == "KRW":
-        return n.date() if n.hour >= 8 else n.date() - timedelta(days=1)
-    return (
-        n.date() if (n.hour, n.minute) >= (21, 30)
-        else n.date() - timedelta(days=1)
-    )
+        return today if n_kst.hour >= 8 else today - timedelta(days=1)
+    cutoff = datetime(today.year, today.month, today.day, 8, 30, tzinfo=_ET)
+    return today if n_kst >= cutoff else today - timedelta(days=1)
 
 
 def _holdings_for(db: Session, account_id: str) -> list[dict[str, Any]]:
