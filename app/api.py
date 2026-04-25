@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -27,7 +27,28 @@ def _name_map(db: Session) -> dict[str, str]:
     return {i.ticker: i.name for i in db.query(Instrument).all()}
 
 
+def _effective_today(currency: str, now: datetime | None = None) -> date:
+    """Trading day used as 'today' for day-change calculations.
+
+    Resets ~1h before market open (server TZ = Asia/Seoul):
+      KRW → 08:00 KST (KOSPI opens 09:00)
+      else → 21:30 KST (US opens 22:30 KST during DST)
+
+    Before the cutoff we treat the calendar yesterday as 'today' so the
+    previous trading session's full-day change keeps showing overnight,
+    and the table only resets to ~0% in the hour before market open.
+    """
+    n = now or datetime.now()
+    if currency == "KRW":
+        return n.date() if n.hour >= 8 else n.date() - timedelta(days=1)
+    return (
+        n.date() if (n.hour, n.minute) >= (21, 30)
+        else n.date() - timedelta(days=1)
+    )
+
+
 def _holdings_for(db: Session, account_id: str) -> list[dict[str, Any]]:
+    acc = db.get(Account, account_id)
     seeds = {
         sh.ticker: sh
         for sh in db.query(SeedHolding).filter_by(account_id=account_id).all()
@@ -39,7 +60,7 @@ def _holdings_for(db: Session, account_id: str) -> list[dict[str, Any]]:
         trades_by_ticker.setdefault(t.ticker, []).append(t)
     tickers = set(seeds) | set(trades_by_ticker)
     names = _name_map(db)
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = _effective_today(acc.currency if acc else "USD") - timedelta(days=1)
     out: list[dict[str, Any]] = []
     for tk in tickers:
         seed = seeds.get(tk)
@@ -90,10 +111,11 @@ def account_holdings(account_id: str, db: Session = Depends(get_db)):
 
 @router.get("/accounts/{account_id}/weights")
 def account_weights(account_id: str, db: Session = Depends(get_db)):
-    if db.get(Account, account_id) is None:
+    acc = db.get(Account, account_id)
+    if acc is None:
         raise HTTPException(404)
     rows = _holdings_for(db, account_id)
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = _effective_today(acc.currency) - timedelta(days=1)
     weights = weights_from_values({r["ticker"]: r["value"] for r in rows})
 
     # yesterday's weights must use yesterday's quantities (replay trades
