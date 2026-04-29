@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dashboard": {
+      "command": "python",
+      "args": ["-m", "app.mcp_server"],
+      "env": {
+        "DB_PATH": "${DB_PATH}"
+      }
+    }
+  }
+}
