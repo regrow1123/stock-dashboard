@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir -e .
 COPY app ./app
 COPY web ./web
 COPY seed ./seed
+COPY mcp.json ./mcp.json
 COPY --from=css /src/web/static/styles.css ./web/static/styles.css
 
 RUN mkdir -p /app/data /home/appuser \
