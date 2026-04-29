@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 
 import httpx
@@ -10,6 +11,30 @@ from app.config import get_settings
 from app.models import Meta
 
 router = APIRouter()
+
+_OPTIONS_RE = re.compile(r"^\[OPTIONS:\s*(.+?)\]\s*$")
+
+
+def _extract_options(text: str) -> tuple[str, list[str] | None]:
+    """If `text` ends with `[OPTIONS: a, b, c]` on its own line, return
+    (text-without-marker, [opts]). Otherwise return (text, None).
+
+    Empty option lists (e.g. `[OPTIONS:  ]`) are treated as no-options:
+    the marker is stripped but no buttons are produced.
+    """
+    if not text:
+        return text, None
+    lines = text.rstrip().split("\n")
+    if not lines:
+        return text, None
+    m = _OPTIONS_RE.match(lines[-1].strip())
+    if not m:
+        return text, None
+    raw = m.group(1)
+    options = [o.strip() for o in raw.split(",")]
+    options = [o for o in options if o]
+    cleaned = "\n".join(lines[:-1]).rstrip()
+    return cleaned, (options or None)
 
 
 def send_reply(chat_id: int, text: str, *, reply_to: int | None = None) -> None:
