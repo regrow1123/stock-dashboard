@@ -88,7 +88,8 @@ def test_send_reply_attaches_inline_keyboard_when_marker_present(monkeypatch):
     def fake_post(url, json=None, timeout=None):
         captured["url"] = url
         captured["json"] = json
-        class R: pass
+        class R:
+            pass
         return R()
     monkeypatch.setattr("app.telegram.httpx.post", fake_post)
     monkeypatch.setenv("TG_BOT_TOKEN", "tok")
