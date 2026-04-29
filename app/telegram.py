@@ -1,21 +1,15 @@
-import json
-from dataclasses import asdict
-from datetime import date, timedelta
+from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.agent import get_window, run_agent
 from app.api import get_db
 from app.config import get_settings
-from app.models import Account, Dividend, Meta, PendingConfirm, Trade
-from app.parser import parse_message
-from app.prices import backfill_prices, refresh_live_prices
-from app.snapshots import recompute_snapshots
+from app.models import Meta
 
 router = APIRouter()
-
-CONFIDENCE_THRESHOLD = 0.8
 
 
 def send_reply(chat_id: int, text: str, *, reply_to: int | None = None) -> None:
@@ -30,200 +24,23 @@ def send_reply(chat_id: int, text: str, *, reply_to: int | None = None) -> None:
         pass
 
 
-def _confirm_text(p) -> str:
-    if p.type == "trade":
-        return (
-            f"❓ 이렇게 기록할까요?\n"
-            f"- 계좌: {p.account}\n- 종목: {p.ticker}\n- {p.side} {p.quantity}@{p.price}\n"
-            f"- 날짜: {p.executed_at}\n(예/아니오)"
-        )
-    if p.type == "dividend":
-        return (
-            f"❓ 배당으로 기록할까요?\n"
-            f"- 계좌: {p.account}\n- 종목: {p.ticker}\n"
-            f"- 금액: {p.amount}\n- 지급일: {p.paid_at}\n(예/아니오)"
-        )
-    return "❓ 해석하지 못했습니다. 계좌/종목/수량/가격/날짜를 다시 알려주세요."
-
-
-_SIDE_KO = {"buy": "매수", "sell": "매도"}
-
-
-def _success_text(p) -> str:
-    if p.type == "trade":
-        side_ko = _SIDE_KO.get(p.side, p.side)
-        return f"✅ {side_ko} {p.ticker} {p.quantity}@{p.price} ({p.account}) 기록"
-    if p.type == "dividend":
-        return f"✅ 배당 {p.ticker} {p.amount} ({p.account}) 기록"
-    return "✅ 기록"
-
-
-def _save_and_recompute(db: Session, p, tg_message_id: int, raw_text: str) -> None:
-    if p.type == "trade":
-        db.add(
-            Trade(
-                account_id=p.account, ticker=p.ticker, side=p.side,
-                quantity=float(p.quantity), price=float(p.price),
-                executed_at=p.executed_at, raw_text=raw_text,
-                tg_message_id=tg_message_id,
-            )
-        )
-        db.commit()
-        # New tickers won't show day_change until prices exist. Fetch
-        # synchronously here so the dashboard reflects the trade right
-        # away; failures are non-fatal because the trade is already saved.
-        acc = db.get(Account, p.account)
-        if acc is not None:
-            today = date.today()
-            try:
-                backfill_prices(
-                    db, ticker=p.ticker, currency=acc.currency,
-                    start=p.executed_at - timedelta(days=14),
-                    end=today + timedelta(days=1),
-                )
-            except Exception:
-                pass
-            try:
-                refresh_live_prices(db, tickers=[p.ticker])
-            except Exception:
-                pass
-        recompute_snapshots(
-            db, from_date=p.executed_at, to_date=date.today(),
-            account_id=p.account,
-        )
-    elif p.type == "dividend":
-        db.add(
-            Dividend(
-                account_id=p.account, ticker=p.ticker, amount=float(p.amount),
-                paid_at=p.paid_at, raw_text=raw_text, tg_message_id=tg_message_id,
-            )
-        )
-        db.commit()
-
-
 def handle_message(db: Session, msg: dict) -> None:
-    """Process a single Telegram 'message' dict. Used by webhook + polling."""
+    """Process a single Telegram 'message' dict via the agent."""
     settings = get_settings()
     chat_id = msg["chat"]["id"]
     if chat_id != settings.tg_chat_id:
         return
     text = msg.get("text", "")
     tg_message_id = msg["message_id"]
-
-    # yes/no follow-up for pending confirms
-    if text.strip().lower() in {"예", "네", "yes", "y", "아니오", "아니요", "no", "n"}:
-        pending = (
-            db.query(PendingConfirm)
-            .order_by(PendingConfirm.created_at.desc())
-            .first()
-        )
-        if pending is not None:
-            payload = json.loads(pending.payload_json)
-            action = payload.get("action", "save")
-            confirmed = text.strip().lower() in {"예", "네", "yes", "y"}
-            if action == "cancel":
-                if confirmed:
-                    trade = db.get(Trade, payload["trade_id"])
-                    if trade is None:
-                        send_reply(chat_id, "⚠️ 이미 삭제된 기록입니다.", reply_to=tg_message_id)
-                    else:
-                        executed = trade.executed_at
-                        account_id = trade.account_id
-                        side_ko = _SIDE_KO.get(trade.side, trade.side)
-                        summary = (
-                            f"{side_ko} {trade.ticker} {trade.quantity}@{trade.price} "
-                            f"({trade.account_id})"
-                        )
-                        db.delete(trade)
-                        db.commit()
-                        recompute_snapshots(
-                            db, from_date=executed, to_date=date.today(),
-                            account_id=account_id,
-                        )
-                        send_reply(chat_id, f"🗑️ 삭제: {summary}", reply_to=tg_message_id)
-                else:
-                    send_reply(chat_id, "👍 유지합니다.", reply_to=tg_message_id)
-            else:
-                if confirmed:
-                    from app.parser import ParseResult
-                    raw_text = payload.pop("_raw_text", "(confirmed)")
-                    p = ParseResult(
-                        type=payload.get("type", "trade"),
-                        account=payload.get("account"),
-                        ticker=payload.get("ticker"),
-                        side=payload.get("side"),
-                        quantity=payload.get("quantity"),
-                        price=payload.get("price"),
-                        amount=payload.get("amount"),
-                        executed_at=date.fromisoformat(payload["executed_at"])
-                        if payload.get("executed_at") else None,
-                        paid_at=date.fromisoformat(payload["paid_at"])
-                        if payload.get("paid_at") else None,
-                        confidence=float(payload.get("confidence", 1.0)),
-                        note=payload.get("note", ""),
-                        raw={},
-                    )
-                    _save_and_recompute(db, p, tg_message_id, raw_text)
-                    send_reply(chat_id, _success_text(p), reply_to=tg_message_id)
-                else:
-                    send_reply(chat_id, "👍 취소했습니다.", reply_to=tg_message_id)
-            db.delete(pending)
-            db.commit()
+    if not text.strip():
         return
 
-    accounts = [
-        {"id": a.id, "name": a.name}
-        for a in db.query(Account).order_by(Account.display_order).all()
-    ]
-    parsed = parse_message(text, accounts=accounts, today=date.today())
-
-    # Cancel intent: queue a confirmation that points at the most recent Trade.
-    if parsed.type == "cancel" and parsed.confidence >= CONFIDENCE_THRESHOLD:
-        latest = db.query(Trade).order_by(Trade.id.desc()).first()
-        if latest is None:
-            send_reply(chat_id, "취소할 기록이 없습니다.", reply_to=tg_message_id)
-            return
-        side_ko = _SIDE_KO.get(latest.side, latest.side)
-        summary = (
-            f"{side_ko} {latest.ticker} {latest.quantity}@{latest.price} "
-            f"({latest.account_id}, {latest.executed_at})"
-        )
-        cancel_payload = {"action": "cancel", "trade_id": latest.id, "summary": summary}
-        db.add(PendingConfirm(
-            tg_message_id=tg_message_id,
-            payload_json=json.dumps(cancel_payload, ensure_ascii=False),
-        ))
-        db.commit()
-        send_reply(
-            chat_id,
-            f"❓ 가장 최근 기록을 취소할까요?\n- {summary}\n(예/아니오)",
-            reply_to=tg_message_id,
-        )
-        return
-
-    # Route to pending if confidence is low, type is unknown, or required fields are missing
-    def _needs_confirm(p) -> bool:
-        if p.type == "unknown" or p.confidence < CONFIDENCE_THRESHOLD:
-            return True
-        if p.type == "trade":
-            return not all([p.account, p.ticker, p.side, p.quantity, p.price, p.executed_at])
-        if p.type == "dividend":
-            return not all([p.account, p.ticker, p.amount, p.paid_at])
-        return True
-
-    if _needs_confirm(parsed):
-        payload = asdict(parsed)
-        payload["executed_at"] = parsed.executed_at.isoformat() if parsed.executed_at else None
-        payload["paid_at"] = parsed.paid_at.isoformat() if parsed.paid_at else None
-        payload.pop("raw", None)
-        payload["_raw_text"] = text
-        db.add(PendingConfirm(tg_message_id=tg_message_id, payload_json=json.dumps(payload, ensure_ascii=False)))
-        db.commit()
-        send_reply(chat_id, _confirm_text(parsed), reply_to=tg_message_id)
-        return
-
-    _save_and_recompute(db, parsed, tg_message_id, text)
-    send_reply(chat_id, _success_text(parsed), reply_to=tg_message_id)
+    window = get_window()
+    now = datetime.now()
+    window.append("user", text, at=now)
+    reply = run_agent(text, window=window)
+    window.append("assistant", reply, at=datetime.now())
+    send_reply(chat_id, reply, reply_to=tg_message_id)
 
 
 @router.post("/telegram/webhook")
