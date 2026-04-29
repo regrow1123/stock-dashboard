@@ -78,3 +78,74 @@ def test_extract_options_allows_single_option():
     cleaned, options = _extract_options(text)
     assert cleaned == "Confirm?"
     assert options == ["예"]
+
+
+def test_send_reply_attaches_inline_keyboard_when_marker_present(monkeypatch):
+    from app.telegram import send_reply
+    from app.config import get_settings
+    captured = {}
+
+    def fake_post(url, json=None, timeout=None):
+        captured["url"] = url
+        captured["json"] = json
+        class R: pass
+        return R()
+    monkeypatch.setattr("app.telegram.httpx.post", fake_post)
+    monkeypatch.setenv("TG_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TG_CHAT_ID", "123")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    get_settings.cache_clear()
+
+    send_reply(123, "❓ 어느 계좌?\n[OPTIONS: A, B, C]")
+
+    assert captured["url"].endswith("/sendMessage")
+    payload = captured["json"]
+    assert payload["chat_id"] == 123
+    assert payload["text"] == "❓ 어느 계좌?"
+    rm = payload["reply_markup"]
+    assert rm == {
+        "inline_keyboard": [
+            [{"text": "A", "callback_data": "A"}],
+            [{"text": "B", "callback_data": "B"}],
+            [{"text": "C", "callback_data": "C"}],
+        ]
+    }
+
+
+def test_send_reply_omits_reply_markup_when_no_marker(monkeypatch):
+    from app.telegram import send_reply
+    from app.config import get_settings
+    captured = {}
+    monkeypatch.setattr(
+        "app.telegram.httpx.post",
+        lambda url, json=None, timeout=None: captured.setdefault("json", json),
+    )
+    monkeypatch.setenv("TG_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TG_CHAT_ID", "123")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    get_settings.cache_clear()
+
+    send_reply(123, "✅ 매수 기록 완료")
+
+    assert captured["json"]["text"] == "✅ 매수 기록 완료"
+    assert "reply_markup" not in captured["json"]
+
+
+def test_send_reply_passes_reply_to_alongside_keyboard(monkeypatch):
+    from app.telegram import send_reply
+    from app.config import get_settings
+    captured = {}
+    monkeypatch.setattr(
+        "app.telegram.httpx.post",
+        lambda url, json=None, timeout=None: captured.setdefault("json", json),
+    )
+    monkeypatch.setenv("TG_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TG_CHAT_ID", "123")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    get_settings.cache_clear()
+
+    send_reply(123, "Q?\n[OPTIONS: a, b]", reply_to=42)
+
+    p = captured["json"]
+    assert p["reply_to_message_id"] == 42
+    assert "reply_markup" in p

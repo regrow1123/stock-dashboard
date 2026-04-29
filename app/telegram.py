@@ -39,9 +39,16 @@ def _extract_options(text: str) -> tuple[str, list[str] | None]:
 
 def send_reply(chat_id: int, text: str, *, reply_to: int | None = None) -> None:
     settings = get_settings()
-    payload = {"chat_id": chat_id, "text": text}
+    visible_text, options = _extract_options(text)
+    payload: dict = {"chat_id": chat_id, "text": visible_text}
     if reply_to is not None:
         payload["reply_to_message_id"] = reply_to
+    if options:
+        payload["reply_markup"] = {
+            "inline_keyboard": [
+                [{"text": o, "callback_data": o}] for o in options
+            ]
+        }
     url = f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage"
     try:
         httpx.post(url, json=payload, timeout=10)
