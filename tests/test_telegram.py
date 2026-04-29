@@ -262,3 +262,83 @@ def test_handle_callback_ignores_unknown_chat(monkeypatch, db):
     }
     handle_callback(db, cb)
     assert hits == {"acked": 0, "routed": 0}
+
+
+def test_webhook_routes_callback_query(monkeypatch, engine):
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    from app.config import get_settings
+    monkeypatch.setenv("TG_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TG_CHAT_ID", "42")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    get_settings.cache_clear()
+
+    routed = {"cb": 0, "msg": 0}
+    monkeypatch.setattr(
+        "app.telegram.handle_callback",
+        lambda d, cb: routed.__setitem__("cb", routed["cb"] + 1),
+    )
+    monkeypatch.setattr(
+        "app.telegram.handle_message",
+        lambda d, m: routed.__setitem__("msg", routed["msg"] + 1),
+    )
+
+    app = create_app(engine=engine, start_scheduler=False)
+    c = TestClient(app)
+    body = {
+        "update_id": 100,
+        "callback_query": {
+            "id": "cbq",
+            "data": "X",
+            "message": {
+                "message_id": 1, "text": "?",
+                "chat": {"id": 42, "type": "private"},
+            },
+        },
+    }
+    r = c.post(
+        "/telegram/webhook", json=body,
+        headers={"X-Telegram-Bot-Api-Secret-Token": "s"},
+    )
+    assert r.status_code == 200
+    assert routed == {"cb": 1, "msg": 0}
+
+
+def test_polling_processes_callback_query_update(monkeypatch, db):
+    from app.telegram import poll_updates_job
+    from app.config import get_settings
+    monkeypatch.setenv("TG_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TG_CHAT_ID", "42")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    get_settings.cache_clear()
+
+    routed = {"cb": 0, "msg": 0}
+    monkeypatch.setattr(
+        "app.telegram.handle_callback",
+        lambda d, cb: routed.__setitem__("cb", routed["cb"] + 1),
+    )
+    monkeypatch.setattr(
+        "app.telegram.handle_message",
+        lambda d, m: routed.__setitem__("msg", routed["msg"] + 1),
+    )
+
+    def fake_get(url, params=None, timeout=None):
+        class R:
+            def json(self):
+                return {
+                    "ok": True,
+                    "result": [
+                        {"update_id": 11, "callback_query": {
+                            "id": "x", "data": "X",
+                            "message": {
+                                "message_id": 1, "text": "?",
+                                "chat": {"id": 42, "type": "private"},
+                            },
+                        }},
+                    ],
+                }
+        return R()
+    monkeypatch.setattr("app.telegram.httpx.get", fake_get)
+
+    poll_updates_job(session_factory=lambda: db)
+    assert routed == {"cb": 1, "msg": 0}

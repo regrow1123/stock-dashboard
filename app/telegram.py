@@ -134,9 +134,11 @@ async def webhook(
         raise HTTPException(401, "bad secret")
     body = await request.json()
     msg = body.get("message") or body.get("edited_message")
-    if not msg:
-        return {"ok": True}
-    handle_message(db, msg)
+    cb = body.get("callback_query")
+    if msg:
+        handle_message(db, msg)
+    elif cb:
+        handle_callback(db, cb)
     return {"ok": True}
 
 
@@ -161,8 +163,11 @@ def poll_updates_job(session_factory) -> None:
         for update in data.get("result", []):
             last = update["update_id"]
             msg = update.get("message") or update.get("edited_message")
+            cb = update.get("callback_query")
             if msg:
                 handle_message(db, msg)
+            elif cb:
+                handle_callback(db, cb)
         if last is not None:
             if offset_row is None:
                 db.add(Meta(key="tg_offset", value=str(last)))
