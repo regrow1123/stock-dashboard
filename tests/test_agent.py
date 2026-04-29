@@ -40,3 +40,41 @@ def test_empty_window_renders_placeholder():
     w = SlidingWindow()
     out = w.render()
     assert "(empty" in out
+
+
+from unittest.mock import MagicMock
+
+from app.agent import build_prompt, run_agent
+
+
+def test_build_prompt_includes_window_and_message():
+    w = SlidingWindow()
+    w.append("user", "earlier message", at=datetime(2026, 4, 29, 12, 0))
+    prompt = build_prompt(window=w, message="latest", at=datetime(2026, 4, 29, 12, 0, 5))
+    assert "earlier message" in prompt
+    assert "latest" in prompt
+    assert "Tools:" in prompt
+    assert "Resolution rules" in prompt
+
+
+def test_run_agent_invokes_claude_and_returns_stdout(monkeypatch):
+    fake_run = MagicMock()
+    fake_run.return_value = MagicMock(
+        returncode=0, stdout="✅ 매수 기록", stderr="",
+    )
+    monkeypatch.setattr("app.agent.subprocess.run", fake_run)
+    out = run_agent("뉴로핏 10주 매수")
+    assert out == "✅ 매수 기록"
+    args, kwargs = fake_run.call_args
+    cmd = args[0]
+    assert cmd[0] == "claude"
+    assert "-p" in cmd
+    assert "--mcp-config" in cmd
+
+
+def test_run_agent_returns_error_text_on_failure(monkeypatch):
+    fake_run = MagicMock()
+    fake_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+    monkeypatch.setattr("app.agent.subprocess.run", fake_run)
+    out = run_agent("hi")
+    assert "오류" in out or "error" in out.lower()
