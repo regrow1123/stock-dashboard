@@ -61,6 +61,15 @@ def backfill_prices_job(session_factory) -> None:
             db.close()
 
 
+def krx_cache_refresh_job() -> None:
+    """Refresh the in-memory KRX listings cache from FinanceDataReader."""
+    from app.krx_listings import get_cache
+    try:
+        get_cache().refresh()
+    except Exception:
+        pass
+
+
 def make_scheduler(session_factory) -> BackgroundScheduler:
     sched = BackgroundScheduler(timezone="Asia/Seoul")
     sched.add_job(refresh_prices_job, "interval", minutes=15, args=[session_factory],
@@ -74,6 +83,10 @@ def make_scheduler(session_factory) -> BackgroundScheduler:
                   id="backfill_prices_kr", max_instances=1, coalesce=True)
     sched.add_job(backfill_prices_job, "cron", hour=6, minute=30, args=[session_factory],
                   id="backfill_prices_us", max_instances=1, coalesce=True)
+    sched.add_job(
+        krx_cache_refresh_job, "cron", hour=7, minute=0,
+        id="krx_cache_refresh", max_instances=1, coalesce=True,
+    )
     from app.config import get_settings
     from app.telegram import poll_updates_job
     if get_settings().tg_polling:

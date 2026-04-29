@@ -13,6 +13,14 @@ from app.scheduler import make_scheduler
 def create_app(engine=None, *, start_scheduler: bool = True) -> FastAPI:
     eng = engine or make_engine()
     init_db(eng)
+    if start_scheduler:
+        from app.krx_listings import get_cache
+        cache = get_cache()
+        if not cache.hydrate():
+            try:
+                cache.refresh()
+            except Exception:
+                pass
     SessionLocal = make_session_factory(eng)
 
     app = FastAPI(title="Stock Dashboard")
