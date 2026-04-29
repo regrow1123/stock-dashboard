@@ -191,3 +191,74 @@ def test_edit_message_text_posts_chat_id_and_new_text(monkeypatch):
         "message_id": 99,
         "text": "❓ 어느 계좌? → 삼성 ISA ✓",
     }
+
+
+def test_handle_callback_acks_edits_and_routes(monkeypatch, db):
+    from app.telegram import handle_callback
+    from app.config import get_settings
+    monkeypatch.setenv("TG_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TG_CHAT_ID", "777")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    get_settings.cache_clear()
+
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        "app.telegram.answer_callback_query",
+        lambda cid: calls.append(("ack", cid)),
+    )
+    monkeypatch.setattr(
+        "app.telegram.edit_message_text",
+        lambda chat, mid, txt: calls.append(("edit", chat, mid, txt)),
+    )
+    monkeypatch.setattr(
+        "app.telegram.handle_message",
+        lambda d, msg: calls.append(("msg", msg["text"], msg["chat"]["id"])),
+    )
+
+    cb = {
+        "id": "cbq_xyz",
+        "data": "삼성 ISA",
+        "message": {
+            "message_id": 55,
+            "chat": {"id": 777, "type": "private"},
+            "text": "❓ 어느 계좌인가요?",
+        },
+        "from": {"id": 777, "is_bot": False, "first_name": "u"},
+    }
+
+    handle_callback(db, cb)
+
+    assert calls[0] == ("ack", "cbq_xyz")
+    assert calls[1] == ("edit", 777, 55, "❓ 어느 계좌인가요? → 삼성 ISA ✓")
+    assert calls[2] == ("msg", "삼성 ISA", 777)
+
+
+def test_handle_callback_ignores_unknown_chat(monkeypatch, db):
+    from app.telegram import handle_callback
+    from app.config import get_settings
+    monkeypatch.setenv("TG_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TG_CHAT_ID", "777")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    get_settings.cache_clear()
+
+    hits = {"acked": 0, "routed": 0}
+    monkeypatch.setattr(
+        "app.telegram.answer_callback_query",
+        lambda cid: hits.__setitem__("acked", hits["acked"] + 1),
+    )
+    monkeypatch.setattr(
+        "app.telegram.handle_message",
+        lambda *a, **k: hits.__setitem__("routed", hits["routed"] + 1),
+    )
+
+    cb = {
+        "id": "x",
+        "data": "ignored",
+        "message": {
+            "message_id": 1,
+            "chat": {"id": 999, "type": "private"},
+            "text": "anything",
+        },
+    }
+    handle_callback(db, cb)
+    assert hits == {"acked": 0, "routed": 0}

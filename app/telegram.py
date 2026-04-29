@@ -78,6 +78,32 @@ def edit_message_text(chat_id: int, message_id: int, new_text: str) -> None:
         pass
 
 
+def handle_callback(db: Session, cb: dict) -> None:
+    """Process a Telegram `callback_query` (inline keyboard tap)."""
+    settings = get_settings()
+    msg = cb.get("message") or {}
+    chat = msg.get("chat") or {}
+    chat_id = chat.get("id")
+    if chat_id != settings.tg_chat_id:
+        return
+    selected = cb.get("data", "")
+    original_text = msg.get("text", "")
+    msg_id = msg.get("message_id")
+
+    answer_callback_query(cb["id"])
+    if msg_id is not None:
+        edit_message_text(chat_id, msg_id, f"{original_text} → {selected} ✓")
+
+    if not selected:
+        return
+    synth = {
+        "chat": chat,
+        "text": selected,
+        "message_id": msg_id,
+    }
+    handle_message(db, synth)
+
+
 def handle_message(db: Session, msg: dict) -> None:
     """Process a single Telegram 'message' dict via the agent."""
     settings = get_settings()
