@@ -118,7 +118,7 @@ def recent_dividends(
 def search_ticker_kr(korean_name: str) -> list[dict[str, Any]]:
     cache = get_cache()
     return [
-        {"ticker": t, "name": korean_name, "market": m}
+        {"ticker": t, "name": cache.get_name(t) or korean_name, "market": m}
         for t, m in cache.search_by_name(korean_name)
     ]
 

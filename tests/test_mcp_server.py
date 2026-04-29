@@ -94,6 +94,19 @@ def test_search_ticker_kr_uses_cache(monkeypatch):
     assert out == [{"ticker": "380550.KQ", "name": "뉴로핏", "market": "KOSDAQ"}]
 
 
+def test_search_ticker_kr_returns_canonical_names_on_substring(monkeypatch):
+    from app.krx_listings import KrxCache
+    cache = KrxCache()
+    cache._load_from_records([
+        {"Code": "005930", "Name": "삼성전자", "Market": "KOSPI"},
+        {"Code": "207940", "Name": "삼성바이오로직스", "Market": "KOSPI"},
+    ])
+    monkeypatch.setattr("app.mcp_server.get_cache", lambda: cache)
+    out = search_ticker_kr("삼성")
+    names = {r["name"] for r in out}
+    assert names == {"삼성전자", "삼성바이오로직스"}
+
+
 def test_verify_ticker_us_returns_info(monkeypatch):
     fake_yf = MagicMock()
     fake_yf.Ticker.return_value.info = {
