@@ -91,10 +91,12 @@ Create `/tmp/mcp_smoke/mcp.json`:
 Run from a shell:
 
 ```bash
-claude -p --mcp-config /tmp/mcp_smoke/mcp.json --allowedTools "mcp__smoke__add" "Use the smoke.add tool to compute 7+5 and reply with just the number."
+claude --mcp-config /tmp/mcp_smoke/mcp.json --allowedTools mcp__smoke__add -p "Use the add tool from the smoke MCP server to compute 7+5. Reply with just the number."
 ```
 
-Expected output: a line containing `12` (or a reply like "12"). If the CLI returns `12`, MCP works in non-interactive mode and Plan A is viable.
+Expected output: a line containing `12`. **Flag order matters**: `--allowedTools <tools...>` is variadic and will eat the prompt if `-p <prompt>` does not come last. Verified working on `claude` CLI version 2.1.123 (2026-04-29).
+
+If the CLI returns `12`, MCP works in non-interactive mode and Plan A is viable.
 
 - [ ] **Step 4: Document the result**
 
@@ -1321,9 +1323,9 @@ In a shell with `.venv` activated and `.env` loaded:
 DB_PATH=./data/dashboard.db .venv/bin/python -c "
 import subprocess
 out = subprocess.run(
-    ['claude', '-p', '--mcp-config', './mcp.json',
+    ['claude', '--mcp-config', './mcp.json',
      '--allowedTools', 'mcp__dashboard__t_list_accounts',
-     'List all my portfolio accounts using the t_list_accounts tool. Reply with the account ids only, comma-separated.'],
+     '-p', 'List all my portfolio accounts using the t_list_accounts tool. Reply with the account ids only, comma-separated.'],
     capture_output=True, text=True, timeout=60,
 )
 print('STDOUT:', out.stdout)
@@ -1590,8 +1592,8 @@ def run_agent(message: str, *, window: SlidingWindow | None = None) -> str:
     cfg = str(Path("mcp.json").resolve())
     try:
         out = subprocess.run(
-            [settings.claude_bin, "-p", "--mcp-config", cfg,
-             "--allowedTools", _ALLOWED_TOOLS, prompt],
+            [settings.claude_bin, "--mcp-config", cfg,
+             "--allowedTools", _ALLOWED_TOOLS, "-p", prompt],
             capture_output=True, text=True, timeout=120, check=False,
         )
     except subprocess.TimeoutExpired:
@@ -2008,9 +2010,9 @@ Expected: a path is printed.
 docker compose exec -T app python -c "
 import subprocess
 out = subprocess.run(
-    ['claude', '-p', '--mcp-config', '/app/mcp.json',
+    ['claude', '--mcp-config', '/app/mcp.json',
      '--allowedTools', 'mcp__dashboard__t_list_accounts',
-     'List my account ids using t_list_accounts. Reply with just the comma-separated ids.'],
+     '-p', 'List my account ids using t_list_accounts. Reply with just the comma-separated ids.'],
     capture_output=True, text=True, timeout=120,
 )
 print('OUT:', out.stdout)
