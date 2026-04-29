@@ -1,3 +1,8 @@
+import pickle
+from unittest.mock import MagicMock
+
+import pandas as pd
+
 from app.krx_listings import KrxCache
 
 
@@ -49,12 +54,6 @@ def test_get_name_returns_canonical_korean_name():
     ])
     assert cache.get_name("005930.KS") == "삼성전자"
     assert cache.get_name("999999.KS") is None
-
-
-import pickle
-from unittest.mock import MagicMock
-
-import pandas as pd
 
 
 def test_refresh_calls_fdr_and_loads_records(monkeypatch, tmp_path):

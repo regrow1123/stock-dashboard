@@ -1,12 +1,11 @@
 from datetime import date
 from unittest.mock import MagicMock
 
-import pandas as pd
 import pytest
 from sqlalchemy import select
 
 from app.models import (
-    Account, Dividend, Instrument, LivePrice, Price, SeedHolding, Trade,
+    Account, Dividend, Instrument, LivePrice, SeedHolding, Trade,
 )
 from app.mcp_server import (
     list_accounts, list_holdings, recent_trades, recent_dividends,

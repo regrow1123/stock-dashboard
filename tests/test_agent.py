@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock
 
-from app.agent import SlidingWindow
+from app.agent import SlidingWindow, build_prompt, run_agent
 
 
 def test_window_renders_recent_messages():
@@ -40,11 +41,6 @@ def test_empty_window_renders_placeholder():
     w = SlidingWindow()
     out = w.render()
     assert "(empty" in out
-
-
-from unittest.mock import MagicMock
-
-from app.agent import build_prompt, run_agent
 
 
 def test_build_prompt_includes_window_and_message():
