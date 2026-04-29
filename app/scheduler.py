@@ -91,7 +91,7 @@ def make_scheduler(session_factory) -> BackgroundScheduler:
     from app.telegram import poll_updates_job
     if get_settings().tg_polling:
         sched.add_job(
-            poll_updates_job, "interval", seconds=30, args=[session_factory],
+            poll_updates_job, "interval", seconds=5, args=[session_factory],
             id="poll_telegram", max_instances=1, coalesce=True,
         )
     return sched
