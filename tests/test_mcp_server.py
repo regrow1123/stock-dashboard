@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+from sqlalchemy import select
 
 from app.models import (
     Account, Dividend, Instrument, LivePrice, Price, SeedHolding, Trade,
@@ -10,6 +11,7 @@ from app.models import (
 from app.mcp_server import (
     list_accounts, list_holdings, recent_trades, recent_dividends,
     search_ticker_kr, verify_ticker_us, lookup_ticker,
+    record_trade, record_dividend, cancel_trade, register_instrument,
 )
 
 
@@ -133,3 +135,71 @@ def test_lookup_ticker_falls_back_to_yfinance(seeded_db, monkeypatch):
         "ticker": "NEWTICK", "name": "Some New Co.",
         "currency": "USD", "current_price": 42.0,
     }
+
+
+def test_register_instrument_upserts(seeded_db):
+    register_instrument(seeded_db, "278470.KS", "에이피알")
+    inst = seeded_db.get(Instrument, "278470.KS")
+    assert inst.name == "에이피알"
+    # Update path
+    register_instrument(seeded_db, "278470.KS", "APR Co")
+    inst = seeded_db.get(Instrument, "278470.KS")
+    assert inst.name == "APR Co"
+
+
+def test_record_trade_saves_and_creates_instrument(seeded_db, monkeypatch):
+    monkeypatch.setattr("app.mcp_server._post_save_recompute", lambda *a, **k: None)
+    out = record_trade(
+        seeded_db,
+        account_id="kr1", ticker="380550.KQ", side="buy",
+        quantity=10.0, price=21200.0, executed_at=date(2026, 4, 28),
+        name="뉴로핏",
+    )
+    assert "trade_id" in out
+    t = seeded_db.get(Trade, out["trade_id"])
+    assert t.ticker == "380550.KQ"
+    assert t.quantity == 10.0
+    inst = seeded_db.get(Instrument, "380550.KQ")
+    assert inst is not None
+    assert inst.name == "뉴로핏"
+
+
+def test_record_trade_skips_instrument_when_no_name(seeded_db, monkeypatch):
+    monkeypatch.setattr("app.mcp_server._post_save_recompute", lambda *a, **k: None)
+    record_trade(
+        seeded_db,
+        account_id="kr1", ticker="000001.KS", side="buy",
+        quantity=1.0, price=1000.0, executed_at=date(2026, 4, 28),
+    )
+    assert seeded_db.get(Instrument, "000001.KS") is None
+
+
+def test_record_dividend_saves(seeded_db):
+    out = record_dividend(
+        seeded_db,
+        account_id="kr1", ticker="005930.KS",
+        amount=1500.0, paid_at=date(2026, 4, 1), name="삼성전자",
+    )
+    assert "dividend_id" in out
+    d = seeded_db.get(Dividend, out["dividend_id"])
+    assert d.amount == 1500.0
+
+
+def test_cancel_trade_deletes_and_returns_summary(seeded_db, monkeypatch):
+    monkeypatch.setattr("app.mcp_server._post_cancel_recompute", lambda *a, **k: None)
+    seeded_db.add(Trade(
+        account_id="kr1", ticker="005930.KS", side="buy",
+        quantity=3.0, price=85000, executed_at=date(2026, 4, 28),
+    ))
+    seeded_db.commit()
+    tid = seeded_db.execute(
+        select(Trade).order_by(Trade.id.desc()).limit(1)
+    ).scalar_one().id
+    out = cancel_trade(seeded_db, tid)
+    assert out["ok"] is True
+    assert seeded_db.get(Trade, tid) is None
+
+
+def test_cancel_trade_returns_not_found(seeded_db):
+    out = cancel_trade(seeded_db, 99999)
+    assert out == {"ok": False, "error": "not_found"}

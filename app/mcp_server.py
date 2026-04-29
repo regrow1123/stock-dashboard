@@ -148,3 +148,111 @@ def lookup_ticker(db: Session, ticker: str) -> dict[str, Any]:
         "currency": info.get("currency"),
         "current_price": info.get("regularMarketPrice") or info.get("currentPrice"),
     }
+
+
+# ---------- Write tools ----------
+
+from datetime import date, timedelta  # noqa: E402
+
+from app.prices import backfill_prices, refresh_live_prices  # noqa: E402
+from app.snapshots import recompute_snapshots  # noqa: E402
+
+
+def register_instrument(db: Session, ticker: str, name: str) -> dict[str, Any]:
+    inst = db.get(Instrument, ticker)
+    if inst is None:
+        db.add(Instrument(ticker=ticker, name=name))
+    else:
+        inst.name = name
+    db.commit()
+    return {"ok": True, "ticker": ticker, "name": name}
+
+
+def _post_save_recompute(
+    db: Session, *, account_id: str, ticker: str,
+    executed_at: date, currency: str | None,
+) -> None:
+    """Backfill prices for the new ticker (best-effort) and recompute snapshots."""
+    today = date.today()
+    if currency is not None:
+        try:
+            backfill_prices(
+                db, ticker=ticker, currency=currency,
+                start=executed_at - timedelta(days=14),
+                end=today + timedelta(days=1),
+            )
+        except Exception:
+            pass
+        try:
+            refresh_live_prices(db, tickers=[ticker])
+        except Exception:
+            pass
+    recompute_snapshots(
+        db, account_id=account_id, from_date=executed_at, to_date=today,
+    )
+
+
+def _post_cancel_recompute(db: Session, *, account_id: str, executed_at: date) -> None:
+    recompute_snapshots(
+        db, account_id=account_id, from_date=executed_at, to_date=date.today(),
+    )
+
+
+def record_trade(
+    db: Session, *, account_id: str, ticker: str, side: str,
+    quantity: float, price: float, executed_at: date,
+    name: str | None = None,
+) -> dict[str, Any]:
+    if side not in ("buy", "sell"):
+        return {"ok": False, "error": "invalid_side"}
+    acc = db.get(Account, account_id)
+    if acc is None:
+        return {"ok": False, "error": "unknown_account"}
+    if name is not None:
+        register_instrument(db, ticker, name)
+    trade = Trade(
+        account_id=account_id, ticker=ticker, side=side,
+        quantity=quantity, price=price, executed_at=executed_at,
+        raw_text="", tg_message_id=None,
+    )
+    db.add(trade)
+    db.commit()
+    _post_save_recompute(
+        db, account_id=account_id, ticker=ticker,
+        executed_at=executed_at, currency=acc.currency,
+    )
+    return {"ok": True, "trade_id": trade.id}
+
+
+def record_dividend(
+    db: Session, *, account_id: str, ticker: str,
+    amount: float, paid_at: date, name: str | None = None,
+) -> dict[str, Any]:
+    if db.get(Account, account_id) is None:
+        return {"ok": False, "error": "unknown_account"}
+    if name is not None:
+        register_instrument(db, ticker, name)
+    div = Dividend(
+        account_id=account_id, ticker=ticker, amount=amount,
+        paid_at=paid_at, raw_text="", tg_message_id=None,
+    )
+    db.add(div)
+    db.commit()
+    return {"ok": True, "dividend_id": div.id}
+
+
+def cancel_trade(db: Session, trade_id: int) -> dict[str, Any]:
+    t = db.get(Trade, trade_id)
+    if t is None:
+        return {"ok": False, "error": "not_found"}
+    summary = {
+        "ticker": t.ticker, "side": t.side, "quantity": t.quantity,
+        "price": t.price, "executed_at": t.executed_at.isoformat(),
+        "account_id": t.account_id,
+    }
+    account_id = t.account_id
+    executed_at = t.executed_at
+    db.delete(t)
+    db.commit()
+    _post_cancel_recompute(db, account_id=account_id, executed_at=executed_at)
+    return {"ok": True, "removed": summary}
