@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Self-hosted single-user portfolio dashboard for Korean + US equities. Ingests trades/dividends via a Telegram bot, parses natural-language messages with the `claude` CLI as a subprocess, fetches prices from Yahoo Finance (yfinance), and serves a responsive web UI. Runs as a single Docker Compose service behind Tailscale / Cloudflare Tunnel.
+Self-hosted single-user portfolio dashboard for Korean + US equities. Ingests trades/dividends via a Telegram bot powered by an LLM agent that uses MCP tools to query and mutate the DB, fetches prices from Yahoo Finance (yfinance), and serves a responsive web UI. Runs as a single Docker Compose service behind Tailscale / Cloudflare Tunnel.
 
 ## Architecture
 
@@ -14,10 +14,14 @@ Self-hosted single-user portfolio dashboard for Korean + US equities. Ingests tr
 2. **Telegram ingestion** — `app/telegram.py` supports two modes controlled by `TG_POLLING` (default `true`):
    - **Polling** (`poll_updates_job`, 30s APScheduler): calls `getUpdates`, advances offset stored in `meta.tg_offset` — works behind NAT, no HTTPS needed.
    - **Webhook** (`POST /telegram/webhook`, secret-token header): for public HTTPS deployments (Cloudflare Tunnel).
-   Both paths call the same `handle_message(db, msg)` which validates chat id, checks for yes/no follow-ups against `pending_confirms`, invokes `parse_message`, then either saves immediately (confidence ≥ 0.8 and all required fields present) or stores a `PendingConfirm` row and asks the user to confirm.
-3. **Background jobs** — `app/scheduler.py` (APScheduler, TZ Asia/Seoul): 15-min live-price refresh, 23:30 daily snapshot recompute (last 7 days), 23:45 benchmark backfill, 30-s Telegram polling.
+   Both paths call `handle_message(db, msg)` which validates chat id, appends to a sliding-window context, and invokes `app/agent.py:run_agent`. The reply text from the agent is sent back to Telegram.
+3. **Background jobs** — `app/scheduler.py` (APScheduler, TZ Asia/Seoul): 15-min live-price refresh, 23:30 daily snapshot recompute (last 7 days), 23:45 benchmark backfill, 30-s Telegram polling, 07:00 KRX listings cache refresh.
 
-**Parser** (`app/parser.py`): shells out to `claude -p <prompt>` with a JSON schema and the allowed account id/name list; on any exception or JSON parse error, returns `ParseResult(type="unknown", confidence=0.0)` so the webhook degrades gracefully to pending-confirm flow rather than losing the message.
+**Agent** (`app/agent.py`): builds a system prompt + sliding-window conversation history + the user's message, then shells out to `claude -p --mcp-config mcp.json --allowedTools <11 tools> -p <prompt>`. The CLI launches `python -m app.mcp_server` as a stdio MCP child; the LLM calls tools like `t_search_ticker_kr`, `t_record_trade`, `t_list_holdings` to do its work. The CLI returns the LLM's final text, which is the Telegram reply. **Flag order matters** — `--allowedTools <tools...>` is variadic and would consume the prompt; put `-p <prompt>` last.
+
+**MCP tools** (`app/mcp_server.py`): 7 read-only (`t_list_accounts`, `t_list_holdings`, `t_recent_trades`, `t_recent_dividends`, `t_search_ticker_kr`, `t_verify_ticker_us`, `t_lookup_ticker`) + 4 write (`t_record_trade`, `t_record_dividend`, `t_cancel_trade`, `t_register_instrument`). Each write tool also handles its downstream effects (price backfill for new tickers, snapshot recompute, instrument upsert).
+
+**KRX listings cache** (`app/krx_listings.py`): in-memory `KrxCache` populated from `FinanceDataReader.StockListing("KRX")`. Persisted as `data/krx_cache.pkl`; lazy-hydrated on first `get_cache()` call (so each short-lived MCP subprocess gets it cheaply); refreshed daily at 07:00 by APScheduler. Maps Korean name → ticker with KOSPI `.KS`/KOSDAQ `.KQ` suffixes; substring fallback when no exact match.
 
 **Snapshot model** (`app/snapshots.py:recompute_snapshots`): snapshots are *derived*, never authoritative. `quantity(D, account, ticker) = seed_holdings + Σ trades(executed_at ≤ D)`. Each recompute **deletes then reinserts** snapshot rows in the date range so late-reported trades back-fill history correctly. Called after every trade insertion with `from_date=executed_at` and by the daily job with `from_date=today-7d`.
 
@@ -60,7 +64,7 @@ Container **must run as non-root** (compose: `user: "1000:1000"`) because the `c
 ## Testing pattern
 
 - `tests/conftest.py` provides `engine` (in-memory SQLite with `StaticPool` so TestClient connections share the DB) and `db` (Session) fixtures. All tests should depend on these.
-- yfinance and subprocess-based `claude -p` are **always mocked** via `monkeypatch.setattr("app.prices.yf", ...)` / `"app.parser.subprocess.run"`. Never hit the real network in tests.
+- yfinance, FinanceDataReader, and subprocess-based `claude -p` are **always mocked** via `monkeypatch.setattr("app.prices.yf", ...)` / `"app.mcp_server.yf"` / `"app.krx_listings.fdr"` / `"app.agent.subprocess.run"`. Never hit the real network in tests.
 - Tests that exercise `create_app` must pass `start_scheduler=False` to avoid leaking background threads; see `_app_with_engine` in `tests/test_api.py`.
 - When changing config-dependent behavior, call `get_settings.cache_clear()` after setting env vars, or the cached Settings instance will be stale.
 
