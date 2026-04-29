@@ -68,6 +68,13 @@ def test_run_agent_invokes_claude_and_returns_stdout(monkeypatch):
     assert "--mcp-config" in cmd
 
 
+def test_system_prompt_documents_options_marker():
+    from app.agent import SYSTEM_PROMPT
+    assert "[OPTIONS:" in SYSTEM_PROMPT
+    assert "마지막 줄" in SYSTEM_PROMPT
+    assert "21자" in SYSTEM_PROMPT
+
+
 def test_run_agent_returns_error_text_on_failure(monkeypatch):
     fake_run = MagicMock()
     fake_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")

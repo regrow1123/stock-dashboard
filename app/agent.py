@@ -63,6 +63,11 @@ Style
 - Reply in Korean.
 - Use ✅ for success, ❓ for confirmations, ⚠️ for problems.
 - Be concise. One short paragraph or 3-5 lines max.
+- 사용자가 정해진 옵션 중에서 골라야 하는 상황이면, 답변 마지막 줄에
+  단독으로 [OPTIONS: 옵션1, 옵션2, ...] 마커를 추가해라. 봇이 이걸
+  인라인 버튼 카드로 변환한다.
+- 옵션 라벨은 짧게 유지하라(한글 21자 이하). 마커는 반드시 마지막 줄에
+  단독으로 두어라. 본문 중간에 두면 버튼이 만들어지지 않는다.
 """
 
 
