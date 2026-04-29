@@ -256,3 +256,117 @@ def cancel_trade(db: Session, trade_id: int) -> dict[str, Any]:
     db.commit()
     _post_cancel_recompute(db, account_id=account_id, executed_at=executed_at)
     return {"ok": True, "removed": summary}
+
+
+# ---------- MCP stdio entrypoint ----------
+
+from datetime import date as _date  # noqa: E402
+
+from mcp.server.fastmcp import FastMCP  # noqa: E402
+
+from app.db import make_engine, make_session_factory  # noqa: E402
+
+mcp = FastMCP("stock-dashboard")
+
+_session_factory = None
+
+
+def _sf():
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = make_session_factory(make_engine())
+    return _session_factory
+
+
+def _with_session(fn, *args, **kwargs):
+    db = _sf()()
+    try:
+        return fn(db, *args, **kwargs)
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def t_list_accounts() -> list[dict]:
+    """List all portfolio accounts with id, name, currency, broker."""
+    return _with_session(list_accounts)
+
+
+@mcp.tool()
+def t_list_holdings(account_id: str | None = None) -> list[dict]:
+    """List current holdings (with current price + value), optionally filtered by account."""
+    return _with_session(list_holdings, account_id=account_id)
+
+
+@mcp.tool()
+def t_recent_trades(limit: int = 10, account_id: str | None = None) -> list[dict]:
+    """Most recent trades (descending by id)."""
+    return _with_session(recent_trades, limit=limit, account_id=account_id)
+
+
+@mcp.tool()
+def t_recent_dividends(limit: int = 10, account_id: str | None = None) -> list[dict]:
+    """Most recent dividends (descending by id)."""
+    return _with_session(recent_dividends, limit=limit, account_id=account_id)
+
+
+@mcp.tool()
+def t_search_ticker_kr(korean_name: str) -> list[dict]:
+    """Search KRX listings by Korean name. Returns 0..N candidates."""
+    return search_ticker_kr(korean_name)
+
+
+@mcp.tool()
+def t_verify_ticker_us(ticker: str) -> dict | None:
+    """Verify a US ticker via yfinance. Returns null if not found."""
+    return verify_ticker_us(ticker)
+
+
+@mcp.tool()
+def t_lookup_ticker(ticker: str) -> dict:
+    """Resolve a ticker to {name, currency, current_price}. Cache first, yfinance fallback."""
+    return _with_session(lookup_ticker, ticker)
+
+
+@mcp.tool()
+def t_record_trade(
+    account_id: str, ticker: str, side: str,
+    quantity: float, price: float, executed_at: str,
+    name: str | None = None,
+) -> dict:
+    """Record a buy or sell. Pass name to also register the ticker name."""
+    return _with_session(
+        record_trade,
+        account_id=account_id, ticker=ticker, side=side,
+        quantity=quantity, price=price,
+        executed_at=_date.fromisoformat(executed_at), name=name,
+    )
+
+
+@mcp.tool()
+def t_record_dividend(
+    account_id: str, ticker: str, amount: float,
+    paid_at: str, name: str | None = None,
+) -> dict:
+    """Record a cash dividend payment."""
+    return _with_session(
+        record_dividend,
+        account_id=account_id, ticker=ticker, amount=amount,
+        paid_at=_date.fromisoformat(paid_at), name=name,
+    )
+
+
+@mcp.tool()
+def t_cancel_trade(trade_id: int) -> dict:
+    """Delete a trade by id and recompute snapshots from its date forward."""
+    return _with_session(cancel_trade, trade_id)
+
+
+@mcp.tool()
+def t_register_instrument(ticker: str, name: str) -> dict:
+    """Map a ticker to its display name (Korean or English)."""
+    return _with_session(register_instrument, ticker, name)
+
+
+if __name__ == "__main__":
+    mcp.run()
