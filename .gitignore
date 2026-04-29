@@ -5,6 +5,7 @@ venv/
 .env
 data/*.db
 data/*.db-*
+data/krx_cache.pkl
 .superpowers/
 .pytest_cache/
 .ruff_cache/
