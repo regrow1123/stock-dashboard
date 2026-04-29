@@ -56,6 +56,28 @@ def send_reply(chat_id: int, text: str, *, reply_to: int | None = None) -> None:
         pass
 
 
+def answer_callback_query(callback_id: str) -> None:
+    settings = get_settings()
+    url = f"https://api.telegram.org/bot{settings.tg_bot_token}/answerCallbackQuery"
+    try:
+        httpx.post(url, json={"callback_query_id": callback_id}, timeout=10)
+    except Exception:
+        pass
+
+
+def edit_message_text(chat_id: int, message_id: int, new_text: str) -> None:
+    settings = get_settings()
+    url = f"https://api.telegram.org/bot{settings.tg_bot_token}/editMessageText"
+    try:
+        httpx.post(
+            url,
+            json={"chat_id": chat_id, "message_id": message_id, "text": new_text},
+            timeout=10,
+        )
+    except Exception:
+        pass
+
+
 def handle_message(db: Session, msg: dict) -> None:
     """Process a single Telegram 'message' dict via the agent."""
     settings = get_settings()

@@ -149,3 +149,45 @@ def test_send_reply_passes_reply_to_alongside_keyboard(monkeypatch):
     p = captured["json"]
     assert p["reply_to_message_id"] == 42
     assert "reply_markup" in p
+
+
+def test_answer_callback_query_posts_to_correct_endpoint(monkeypatch):
+    from app.telegram import answer_callback_query
+    from app.config import get_settings
+    captured = {}
+    monkeypatch.setattr(
+        "app.telegram.httpx.post",
+        lambda url, json=None, timeout=None: captured.update(url=url, json=json),
+    )
+    monkeypatch.setenv("TG_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TG_CHAT_ID", "1")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    get_settings.cache_clear()
+
+    answer_callback_query("cbq_abc")
+
+    assert captured["url"].endswith("/answerCallbackQuery")
+    assert captured["json"] == {"callback_query_id": "cbq_abc"}
+
+
+def test_edit_message_text_posts_chat_id_and_new_text(monkeypatch):
+    from app.telegram import edit_message_text
+    from app.config import get_settings
+    captured = {}
+    monkeypatch.setattr(
+        "app.telegram.httpx.post",
+        lambda url, json=None, timeout=None: captured.update(url=url, json=json),
+    )
+    monkeypatch.setenv("TG_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TG_CHAT_ID", "1")
+    monkeypatch.setenv("TG_WEBHOOK_SECRET", "s")
+    get_settings.cache_clear()
+
+    edit_message_text(123, 99, "❓ 어느 계좌? → 삼성 ISA ✓")
+
+    assert captured["url"].endswith("/editMessageText")
+    assert captured["json"] == {
+        "chat_id": 123,
+        "message_id": 99,
+        "text": "❓ 어느 계좌? → 삼성 ISA ✓",
+    }
