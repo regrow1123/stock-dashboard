@@ -1,7 +1,7 @@
 from datetime import date, datetime
 
 from app.models import Account, Price, SeedHolding
-from app.scheduler import daily_snapshot_job, refresh_prices_job
+from app.scheduler import benchmarks_job, daily_snapshot_job, refresh_prices_job
 
 
 def test_refresh_prices_job_calls_refresh(db, monkeypatch):
@@ -35,3 +35,17 @@ def test_daily_snapshot_job_recomputes_last_7d(db, monkeypatch):
                        now=datetime(2026, 4, 18, 23, 30))
     assert calls[0][1] == date(2026, 4, 18)
     assert (calls[0][1] - calls[0][0]).days == 7
+
+
+def test_benchmarks_job_includes_skew(db, monkeypatch):
+    db.add(Account(id="a", name="N", broker="B", currency="USD", display_order=1))
+    db.commit()
+    called: list[str] = []
+
+    def fake_backfill(session, *, ticker, start, end):
+        called.append(ticker)
+        return 0
+    monkeypatch.setattr("app.scheduler.backfill_benchmark", fake_backfill)
+
+    benchmarks_job(session_factory=lambda: db)
+    assert "^SKEW" in called

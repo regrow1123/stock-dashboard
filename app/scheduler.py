@@ -44,6 +44,7 @@ def benchmarks_job(session_factory) -> None:
         tickers = {BENCHMARK_FOR_CURRENCY.get(a.currency) for a in db.query(Account).all()}
         tickers.discard(None)
         tickers |= {tk for tk, _, _ in MARKET_TICKERS}
+        tickers.add("^SKEW")  # sentiment gauge (CBOE SKEW)
         for tk in tickers:
             backfill_benchmark(db, ticker=tk, start=start, end=today + timedelta(days=1))
     finally:
