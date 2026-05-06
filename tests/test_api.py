@@ -112,6 +112,87 @@ def test_history_date_filter(db, engine, monkeypatch):
     assert data[0]["value"] == 1100.0
 
 
+def test_post_sells_endpoint(db, engine, monkeypatch):
+    from datetime import timedelta
+    from app.models import Account, Instrument, LivePrice, Trade
+    today = date.today()
+    db.add_all([
+        Account(id="a", name="ISA", broker="B", currency="KRW", display_order=1),
+        Account(id="b", name="US", broker="B", currency="USD", display_order=2),
+        Instrument(ticker="005930.KS", name="삼성전자"),
+    ])
+    db.add_all([
+        # Account a, ticker X — older sell that should be filtered out (>90d)
+        Trade(account_id="a", ticker="005930.KS", side="sell", quantity=2,
+              price=60000, executed_at=today - timedelta(days=200)),
+        # Account a, ticker X — most recent sell within window
+        Trade(account_id="a", ticker="005930.KS", side="sell", quantity=3,
+              price=70000, executed_at=today - timedelta(days=30)),
+        # Account a, ticker X — earlier sell within window (should be hidden, dup)
+        Trade(account_id="a", ticker="005930.KS", side="sell", quantity=1,
+              price=65000, executed_at=today - timedelta(days=60)),
+        # Account a, ticker Y — only sell, within window
+        Trade(account_id="a", ticker="000660.KS", side="sell", quantity=4,
+              price=200000, executed_at=today - timedelta(days=10)),
+        # Account a — buy should be ignored
+        Trade(account_id="a", ticker="005930.KS", side="buy", quantity=10,
+              price=50000, executed_at=today - timedelta(days=5)),
+        # Account b, ticker AAPL — within window
+        Trade(account_id="b", ticker="AAPL", side="sell", quantity=2,
+              price=200, executed_at=today - timedelta(days=20)),
+    ])
+    db.add_all([
+        LivePrice(ticker="005930.KS", price=84000, currency="KRW",
+                  fetched_at=datetime(2026, 4, 18, 9, 30)),
+        LivePrice(ticker="000660.KS", price=180000, currency="KRW",
+                  fetched_at=datetime(2026, 4, 18, 9, 30)),
+        LivePrice(ticker="AAPL", price=240, currency="USD",
+                  fetched_at=datetime(2026, 4, 18, 9, 30)),
+    ])
+    db.commit()
+    app = _app_with_engine(engine, monkeypatch)
+    c = TestClient(app)
+    r = c.get("/api/post_sells")
+    assert r.status_code == 200
+    payload = r.json()
+    by_acct = {g["account_id"]: g for g in payload["by_account"]}
+    # Account a has two sold tickers; older 005930 sell deduped to most recent
+    a_items = {it["ticker"]: it for it in by_acct["a"]["items"]}
+    assert set(a_items.keys()) == {"005930.KS", "000660.KS"}
+    s = a_items["005930.KS"]
+    assert s["sold_price"] == 70000
+    assert s["current_price"] == 84000
+    assert round(s["return_pct"], 4) == round((84000 - 70000) / 70000, 4)
+    assert s["name"] == "삼성전자"
+    # Negative return case
+    h = a_items["000660.KS"]
+    assert h["return_pct"] < 0
+    # Account b
+    b_items = by_acct["b"]["items"]
+    assert len(b_items) == 1
+    assert b_items[0]["ticker"] == "AAPL"
+    # Ordering: within an account, sorted by return_pct desc
+    a_returns = [it["return_pct"] for it in by_acct["a"]["items"]]
+    assert a_returns == sorted(a_returns, reverse=True)
+
+
+def test_post_sells_handles_missing_live_price(db, engine, monkeypatch):
+    from datetime import timedelta
+    from app.models import Account, Trade
+    today = date.today()
+    db.add(Account(id="a", name="N", broker="B", currency="USD", display_order=1))
+    db.add(Trade(account_id="a", ticker="ZZZ", side="sell", quantity=1,
+                 price=50, executed_at=today - timedelta(days=10)))
+    db.commit()
+    app = _app_with_engine(engine, monkeypatch)
+    c = TestClient(app)
+    r = c.get("/api/post_sells")
+    assert r.status_code == 200
+    items = r.json()["by_account"][0]["items"]
+    assert items[0]["current_price"] is None
+    assert items[0]["return_pct"] is None
+
+
 def test_benchmark_endpoint_rebased(db, engine, monkeypatch):
     from datetime import date
     from app.models import Account, Benchmark, SeedHolding, Snapshot

@@ -213,6 +213,7 @@
       getJSON('/api/summary'),
       renderMarketTicker(),
       renderSentiment(),
+      renderPostSells(),
     ]);
 
     renderAccountsList(s.accounts || []);
@@ -426,6 +427,49 @@
     } catch (e) {
       host.innerHTML = '';
     }
+  }
+
+  async function renderPostSells() {
+    const host = document.getElementById('post-sells');
+    if (!host) return;
+    let data;
+    try {
+      data = await getJSON('/api/post_sells');
+    } catch (e) {
+      host.innerHTML = '';
+      return;
+    }
+    const groups = (data.by_account || []).filter((g) => g.items?.length);
+    if (!groups.length) {
+      host.innerHTML = `<div class="row-sub" style="padding: 0 0.25rem">최근 3개월 매도 내역이 없습니다.</div>`;
+      return;
+    }
+    host.innerHTML = groups.map((g) => {
+      const rows = g.items.map((it) => {
+        const ret = it.return_pct;
+        const pillCls = ret == null ? 'pill-muted' : ret >= 0 ? 'pill-pos' : 'pill-neg';
+        const pillText = ret == null ? '—' : pctStr(ret);
+        const sub = `${monthDay(it.sold_at)} 매도 ${fmtMoney(it.sold_price, g.currency, { fraction: 2 })}` +
+          (it.current_price != null ? ` → ${fmtMoney(it.current_price, g.currency, { fraction: 2 })}` : '');
+        return `
+          <li class="row-item">
+            <div>
+              <div class="row-title">${escapeHTML(it.name || it.ticker)}
+                ${it.name ? `<span class="row-sub" style="display:inline; margin-left:.4rem">${escapeHTML(it.ticker)}</span>` : ''}
+              </div>
+              <div class="row-sub">${sub}</div>
+            </div>
+            <div class="row-right">
+              <span class="pill ${pillCls}">${pillText}</span>
+            </div>
+          </li>`;
+      }).join('');
+      return `
+        <div class="post-sells-group" style="margin-bottom: 0.75rem">
+          <div class="label" style="margin: 0 0.25rem 0.375rem">${escapeHTML(g.name)}</div>
+          <ul class="row-list">${rows}</ul>
+        </div>`;
+    }).join('');
   }
 
   function renderAccountsList(accounts) {

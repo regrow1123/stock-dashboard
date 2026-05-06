@@ -245,6 +245,60 @@ def sentiment(db: Session = Depends(get_db)):
     return {"fear_and_greed": cnn_fg(db), "skew": skew}
 
 
+@router.get("/post_sells")
+def post_sells(db: Session = Depends(get_db)):
+    """For each account, list the most recent sell per ticker within the
+    last 90 days, plus the hypothetical return if the position had been
+    re-bought at the sell price (current_price − sold_price) / sold_price.
+    """
+    cutoff = date.today() - timedelta(days=90)
+    sells = (
+        db.query(Trade)
+        .filter(Trade.side == "sell", Trade.executed_at >= cutoff)
+        .order_by(Trade.executed_at.desc(), Trade.id.desc())
+        .all()
+    )
+    names = _name_map(db)
+    accounts = {a.id: a for a in db.query(Account).order_by(Account.display_order).all()}
+
+    seen: set[tuple[str, str]] = set()
+    by_account: dict[str, list[dict[str, Any]]] = {}
+    for t in sells:
+        key = (t.account_id, t.ticker)
+        if key in seen:
+            continue
+        seen.add(key)
+        cur = _live(db, t.ticker)
+        ret = (cur - t.price) / t.price if (cur is not None and t.price) else None
+        by_account.setdefault(t.account_id, []).append({
+            "ticker": t.ticker,
+            "name": names.get(t.ticker),
+            "sold_price": float(t.price),
+            "sold_at": t.executed_at.isoformat(),
+            "quantity": float(t.quantity),
+            "current_price": cur,
+            "return_pct": ret,
+        })
+
+    groups = []
+    for aid, items in by_account.items():
+        acc = accounts.get(aid)
+        if acc is None:
+            continue
+        items.sort(
+            key=lambda r: (r["return_pct"] is None, -(r["return_pct"] or 0.0))
+        )
+        groups.append({
+            "account_id": aid,
+            "name": acc.name,
+            "currency": acc.currency,
+            "display_order": acc.display_order,
+            "items": items,
+        })
+    groups.sort(key=lambda g: g["display_order"])
+    return {"as_of": date.today().isoformat(), "by_account": groups}
+
+
 @router.get("/summary")
 def summary(db: Session = Depends(get_db)):
     accounts = db.query(Account).order_by(Account.display_order).all()
