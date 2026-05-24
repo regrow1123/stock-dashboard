@@ -8,30 +8,6 @@
   <span class="ml-1">{{ account.currency }}</span>
 </div>
 
-<section aria-labelledby="history-heading">
-  <h2 id="history-heading" class="sr-only">자산 추이 vs 벤치마크</h2>
-  <div class="chart-card" id="history-wrap" aria-busy="true">
-    <div class="chart-card-head">
-      <span class="chart-card-title" id="history-title">자산 추이 · vs —</span>
-      <div class="chip-group chip-group-mono" role="tablist" aria-label="기간 선택" id="range-tabs">
-        <button type="button" class="chip" role="tab" data-range="1M" aria-selected="false">1M</button>
-        <button type="button" class="chip" role="tab" data-range="3M" aria-selected="false">3M</button>
-        <button type="button" class="chip" role="tab" data-range="6M" aria-selected="false">6M</button>
-        <button type="button" class="chip" role="tab" data-range="1Y" aria-selected="true">1Y</button>
-      </div>
-    </div>
-    <div class="chart-card-stats">
-      <span id="history-hero" class="chart-hero">—</span>
-      <span id="history-bench-stat" class="chart-stat-bench">—</span>
-    </div>
-    <div class="chart-canvas-wrap">
-      <canvas id="history" role="img" aria-labelledby="history-summary"></canvas>
-    </div>
-    <div id="history-xlabels" class="chart-xlabels" aria-hidden="true"></div>
-    <p id="history-summary" class="sr-only">자산 추이 차트를 불러오는 중입니다.</p>
-  </div>
-</section>
-
 <section aria-labelledby="weights-heading">
   <div class="section-heading">
     <h2 id="weights-heading">종목 비중</h2>
@@ -53,6 +29,14 @@
     <li class="row-item"><div><div class="row-title skeleton" style="width:55%;height:1rem"></div><div class="row-sub skeleton mt-2" style="width:40%;height:.75rem"></div></div><div class="row-right skeleton" style="width:5rem;height:1rem"></div></li>
     <li class="row-item"><div><div class="row-title skeleton" style="width:55%;height:1rem"></div><div class="row-sub skeleton mt-2" style="width:40%;height:.75rem"></div></div><div class="row-right skeleton" style="width:5rem;height:1rem"></div></li>
   </ul>
+</section>
+
+<section aria-labelledby="post-sells-heading">
+  <div class="section-heading">
+    <h2 id="post-sells-heading">매도 후 추이</h2>
+    <span class="text-xs text-[color:var(--color-muted)]">최근 3개월</span>
+  </div>
+  <div id="post-sells" aria-live="polite"></div>
 </section>
 
 <section aria-labelledby="trades-heading">

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from app.benchmarks import backfill_benchmark, rebase_series
+from app.benchmarks import backfill_benchmark
 from app.models import Benchmark
 
 
@@ -21,13 +21,3 @@ def test_backfill_benchmark(db, monkeypatch):
     rows = db.query(Benchmark).order_by(Benchmark.date).all()
     assert len(rows) == 2
     assert rows[1].close == 5050.0
-
-
-def test_rebase_series_normalizes_to_1():
-    pts = [(date(2026, 4, 15), 100.0),
-           (date(2026, 4, 16), 110.0),
-           (date(2026, 4, 17), 121.0)]
-    out = rebase_series(pts)
-    assert out[0][1] == 1.0
-    assert round(out[1][1], 2) == 1.10
-    assert round(out[2][1], 2) == 1.21

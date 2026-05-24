@@ -38,13 +38,4 @@ def backfill_benchmark(db: Session, *, ticker: str, start: date, end: date) -> i
     return n
 
 
-def rebase_series(points: list[tuple[date, float]]) -> list[tuple[date, float]]:
-    if not points:
-        return []
-    base = points[0][1]
-    if base == 0:
-        return [(d, 0.0) for d, _ in points]
-    return [(d, v / base) for d, v in points]
-
-
 BENCHMARK_FOR_CURRENCY = {"KRW": "^KS11", "USD": "^GSPC"}

@@ -90,28 +90,6 @@ def test_realized_endpoint(db, engine, monkeypatch):
     assert data["realized"] == 200.0  # 4*(150-100)
 
 
-def test_history_date_filter(db, engine, monkeypatch):
-    from app.models import Snapshot
-    db.add(Account(id="a", name="N", broker="B", currency="USD", display_order=1))
-    db.add_all([
-        Snapshot(date=date(2026, 4, 15), account_id="a", ticker="X",
-                 quantity=10, close=100, value=1000),
-        Snapshot(date=date(2026, 4, 16), account_id="a", ticker="X",
-                 quantity=10, close=110, value=1100),
-        Snapshot(date=date(2026, 4, 17), account_id="a", ticker="X",
-                 quantity=10, close=120, value=1200),
-    ])
-    db.commit()
-    app = _app_with_engine(engine, monkeypatch)
-    c = TestClient(app)
-    r = c.get("/api/accounts/a/history?from=2026-04-16&to=2026-04-16")
-    assert r.status_code == 200
-    data = r.json()
-    assert len(data) == 1
-    assert data[0]["date"] == "2026-04-16"
-    assert data[0]["value"] == 1100.0
-
-
 def test_post_sells_endpoint(db, engine, monkeypatch):
     from datetime import timedelta
     from app.models import Account, Instrument, LivePrice, Trade
@@ -152,12 +130,12 @@ def test_post_sells_endpoint(db, engine, monkeypatch):
     db.commit()
     app = _app_with_engine(engine, monkeypatch)
     c = TestClient(app)
-    r = c.get("/api/post_sells")
-    assert r.status_code == 200
-    payload = r.json()
-    by_acct = {g["account_id"]: g for g in payload["by_account"]}
-    # Account a has two sold tickers; older 005930 sell deduped to most recent
-    a_items = {it["ticker"]: it for it in by_acct["a"]["items"]}
+    # Account a: two sold tickers, older 005930 sell deduped to most recent
+    ra = c.get("/api/accounts/a/post_sells")
+    assert ra.status_code == 200
+    payload_a = ra.json()
+    assert payload_a["currency"] == "KRW"
+    a_items = {it["ticker"]: it for it in payload_a["items"]}
     assert set(a_items.keys()) == {"005930.KS", "000660.KS"}
     s = a_items["005930.KS"]
     assert s["sold_price"] == 70000
@@ -167,13 +145,17 @@ def test_post_sells_endpoint(db, engine, monkeypatch):
     # Negative return case
     h = a_items["000660.KS"]
     assert h["return_pct"] < 0
+    # Sorted desc by return_pct within an account
+    a_returns = [it["return_pct"] for it in payload_a["items"]]
+    assert a_returns == sorted(a_returns, reverse=True)
     # Account b
-    b_items = by_acct["b"]["items"]
+    rb = c.get("/api/accounts/b/post_sells")
+    assert rb.status_code == 200
+    b_items = rb.json()["items"]
     assert len(b_items) == 1
     assert b_items[0]["ticker"] == "AAPL"
-    # Ordering: within an account, sorted by return_pct desc
-    a_returns = [it["return_pct"] for it in by_acct["a"]["items"]]
-    assert a_returns == sorted(a_returns, reverse=True)
+    # Unknown account → 404
+    assert c.get("/api/accounts/no_such/post_sells").status_code == 404
 
 
 def test_post_sells_handles_missing_live_price(db, engine, monkeypatch):
@@ -186,33 +168,6 @@ def test_post_sells_handles_missing_live_price(db, engine, monkeypatch):
     db.commit()
     app = _app_with_engine(engine, monkeypatch)
     c = TestClient(app)
-    r = c.get("/api/post_sells")
-    assert r.status_code == 200
-    items = r.json()["by_account"][0]["items"]
+    items = c.get("/api/accounts/a/post_sells").json()["items"]
     assert items[0]["current_price"] is None
     assert items[0]["return_pct"] is None
-
-
-def test_benchmark_endpoint_rebased(db, engine, monkeypatch):
-    from datetime import date
-    from app.models import Account, Benchmark, SeedHolding, Snapshot
-    db.add(Account(id="a", name="N", broker="B", currency="USD", display_order=1))
-    db.add(SeedHolding(account_id="a", ticker="X", quantity=10, avg_price=100))
-    db.add_all([
-        Snapshot(date=date(2026, 4, 15), account_id="a", ticker="X",
-                 quantity=10, close=100, value=1000),
-        Snapshot(date=date(2026, 4, 16), account_id="a", ticker="X",
-                 quantity=10, close=110, value=1100),
-        Benchmark(ticker="^GSPC", date=date(2026, 4, 15), close=5000),
-        Benchmark(ticker="^GSPC", date=date(2026, 4, 16), close=5100),
-    ])
-    db.commit()
-    app = _app_with_engine(engine, monkeypatch)
-    c = TestClient(app)
-    r = c.get("/api/accounts/a/benchmark")
-    assert r.status_code == 200
-    data = r.json()
-    assert data["portfolio"][0]["value"] == 1.0
-    assert data["benchmark"][0]["value"] == 1.0
-    assert round(data["portfolio"][1]["value"], 3) == 1.1
-    assert round(data["benchmark"][1]["value"], 3) == 1.02

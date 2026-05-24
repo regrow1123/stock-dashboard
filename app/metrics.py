@@ -67,34 +67,3 @@ def pct_return(cost: float, value: float) -> float:
     if cost <= 0:
         return 0.0
     return (value - cost) / cost
-
-
-def twr_series(
-    values: list[tuple["date", float]],  # type: ignore[name-defined]  # noqa: F821
-    flows_by_date: dict,
-) -> list[tuple["date", float]]:  # type: ignore[name-defined]
-    """Time-weighted return series rebased to 1.0 at the first date.
-
-    For each step the daily return removes net external cash flow on that date:
-        r_t = (V_t - V_{t-1} - F_t) / V_{t-1}
-    where F_t is net cash flow INTO the portfolio on date t (positive for buys,
-    negative for sells). A buy of N shares at P contributes +N*P; a sell
-    contributes -N*P. This cancels the purchase-day "jump" that would otherwise
-    appear when newly-acquired positions first enter the snapshot.
-
-    Trades dated on the first day in `values` are ignored (no prior period to
-    compute a return over; they're treated as part of the starting position).
-    """
-    if not values:
-        return []
-    out: list[tuple["date", float]] = [(values[0][0], 1.0)]  # type: ignore[name-defined]
-    twr = 1.0
-    for i in range(1, len(values)):
-        d, v_t = values[i]
-        _, v_prev = values[i - 1]
-        f_t = flows_by_date.get(d, 0.0)
-        if v_prev > 0:
-            r = (v_t - v_prev - f_t) / v_prev
-            twr *= 1.0 + r
-        out.append((d, twr))
-    return out
