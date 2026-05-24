@@ -117,6 +117,26 @@ def account_holdings(account_id: str, db: Session = Depends(get_db)):
     return _holdings_for(db, account_id)
 
 
+@router.get("/accounts/{account_id}/sectors")
+def account_sectors(account_id: str, db: Session = Depends(get_db)):
+    acc = db.get(Account, account_id)
+    if acc is None:
+        raise HTTPException(404)
+    rows = _holdings_for(db, account_id)
+    inst = {i.ticker: i for i in db.query(Instrument).all()}
+    agg: dict[str, float] = {}
+    for r in rows:
+        i = inst.get(r["ticker"])
+        sec = (i.sector if i else None) or "미분류"
+        agg[sec] = agg.get(sec, 0.0) + r["value"]
+    total = sum(agg.values()) or 1.0
+    items = sorted(
+        ({"sector": s, "value": v, "weight": v / total} for s, v in agg.items()),
+        key=lambda x: x["value"], reverse=True,
+    )
+    return {"currency": acc.currency, "items": items}
+
+
 @router.get("/accounts/{account_id}/weights")
 def account_weights(account_id: str, db: Session = Depends(get_db)):
     acc = db.get(Account, account_id)

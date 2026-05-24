@@ -325,11 +325,51 @@
 
   async function renderAccount() {
     await Promise.all([
+      renderAccountSectors(),
       renderAccountWeights(),
       renderAccountHoldings(),
       renderAccountPostSells(),
       renderAccountTrades(),
     ]);
+  }
+
+  const SECTOR_COLORS = [
+    '#5b8def', '#34c759', '#ff9f0a', '#ff453a', '#bf5af2',
+    '#5ac8fa', '#ffd60a', '#ff6482', '#64d2ff', '#30d158', '#8e8e93',
+  ];
+
+  async function renderAccountSectors() {
+    const host = document.getElementById('sectors');
+    if (!host) return;
+    let data;
+    try { data = await getJSON(`/api/accounts/${window.ACCOUNT_ID}/sectors`); }
+    catch (e) { host.removeAttribute('aria-busy'); host.innerHTML = ''; return; }
+    const items = data.items || [];
+    if (!items.length) {
+      host.removeAttribute('aria-busy');
+      host.innerHTML = `<div class="row-sub">보유 종목이 없습니다.</div>`;
+      return;
+    }
+    let acc = 0;
+    const stops = items.map((it, i) => {
+      const c = SECTOR_COLORS[i % SECTOR_COLORS.length];
+      const start = acc * 100, end = (acc + it.weight) * 100;
+      acc += it.weight;
+      return `${c} ${start}% ${end}%`;
+    }).join(', ');
+    const legend = items.map((it, i) => {
+      const c = SECTOR_COLORS[i % SECTOR_COLORS.length];
+      return `<li class="sector-legend-row">
+        <span class="sector-dot" style="background:${c}"></span>
+        <span class="sector-name">${escapeHTML(it.sector)}</span>
+        <span class="sector-weight">${(it.weight * 100).toFixed(1)}%</span>
+      </li>`;
+    }).join('');
+    host.removeAttribute('aria-busy');
+    host.innerHTML = `
+      <div class="sector-donut" role="img" aria-label="섹터 비중 도넛 차트"
+           style="background: conic-gradient(${stops})"></div>
+      <ul class="sector-legend">${legend}</ul>`;
   }
 
   async function renderAccountPostSells() {

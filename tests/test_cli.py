@@ -30,3 +30,25 @@ def test_cli_recompute_smoke(db):
     db.commit()
     # just verify it runs without raising
     cmd_recompute(session=db, from_date=date(2026, 4, 15), to_date=date(2026, 4, 17))
+
+
+def test_backfill_sectors_fills_only_null(db, monkeypatch):
+    from app.cli import cmd_backfill_sectors
+    from app.models import Instrument
+
+    db.add_all([
+        Instrument(ticker="AAPL", name="Apple", sector=None),
+        Instrument(ticker="MSFT", name="Microsoft", sector="정보기술"),
+        Instrument(ticker="ZZZ", name="Unknown", sector=None),
+    ])
+    db.commit()
+
+    # AAPL resolves; ZZZ has no sector and is left untouched.
+    lookup = {"AAPL": "정보기술", "ZZZ": None}
+    monkeypatch.setattr("app.cli.fetch_sector", lambda t: lookup.get(t))
+
+    cmd_backfill_sectors(session=db)
+
+    assert db.get(Instrument, "AAPL").sector == "정보기술"
+    assert db.get(Instrument, "MSFT").sector == "정보기술"  # untouched
+    assert db.get(Instrument, "ZZZ").sector is None  # still null, retry later

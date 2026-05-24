@@ -159,9 +159,16 @@ from app.snapshots import recompute_snapshots  # noqa: E402
 
 
 def register_instrument(db: Session, ticker: str, name: str) -> dict[str, Any]:
+    from app.sectors import fetch_sector
+
     inst = db.get(Instrument, ticker)
     if inst is None:
-        db.add(Instrument(ticker=ticker, name=name))
+        sector = None
+        try:
+            sector = fetch_sector(ticker)
+        except Exception:
+            sector = None  # best-effort; registration must not fail
+        db.add(Instrument(ticker=ticker, name=name, sector=sector))
     else:
         inst.name = name
     db.commit()

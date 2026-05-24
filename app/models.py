@@ -106,3 +106,4 @@ class Instrument(Base):
     __tablename__ = "instruments"
     ticker: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    sector: Mapped[str | None] = mapped_column(String, nullable=True)
