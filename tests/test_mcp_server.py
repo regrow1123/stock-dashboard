@@ -215,3 +215,30 @@ def test_cancel_trade_deletes_and_returns_summary(seeded_db, monkeypatch):
 def test_cancel_trade_returns_not_found(seeded_db):
     out = cancel_trade(seeded_db, 99999)
     assert out == {"ok": False, "error": "not_found"}
+
+
+def test_register_instrument_saves_sector(db, monkeypatch):
+    import app.mcp_server as mcp
+    from app.models import Instrument
+
+    monkeypatch.setattr("app.sectors.fetch_sector", lambda t: "정보기술")
+    mcp.register_instrument(db, ticker="AAPL", name="Apple")
+
+    inst = db.get(Instrument, "AAPL")
+    assert inst.sector == "정보기술"
+
+
+def test_register_instrument_tolerates_sector_failure(db, monkeypatch):
+    import app.mcp_server as mcp
+    from app.models import Instrument
+
+    def _boom(t):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr("app.sectors.fetch_sector", _boom)
+    # Registration must still succeed even if sector lookup fails.
+    mcp.register_instrument(db, ticker="MSFT", name="Microsoft")
+
+    inst = db.get(Instrument, "MSFT")
+    assert inst is not None
+    assert inst.sector is None
