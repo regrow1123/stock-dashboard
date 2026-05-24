@@ -348,6 +348,51 @@
     background: linear-gradient(90deg, var(--color-accent), color-mix(in oklab, var(--color-accent) 60%, transparent));
   }
 
+  /* sector donut */
+  .sector-chart {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+  @media (min-width: 768px) {
+    .sector-chart { flex-direction: row; align-items: center; }
+  }
+  .sector-donut {
+    width: 9rem;
+    height: 9rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    /* punch a hole to make it a donut */
+    -webkit-mask: radial-gradient(circle, transparent 52%, #000 53%);
+    mask: radial-gradient(circle, transparent 52%, #000 53%);
+  }
+  .sector-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1;
+    width: 100%;
+  }
+  .sector-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    font-size: 0.875rem;
+  }
+  .sector-dot {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .sector-name { flex: 1; }
+  .sector-weight {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-muted);
+  }
+
   /* table wrap (desktop only) */
   .table-wrap {
     background: var(--color-surface);
