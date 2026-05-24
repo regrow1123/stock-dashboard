@@ -171,3 +171,47 @@ def test_post_sells_handles_missing_live_price(db, engine, monkeypatch):
     items = c.get("/api/accounts/a/post_sells").json()["items"]
     assert items[0]["current_price"] is None
     assert items[0]["return_pct"] is None
+
+
+def test_sectors_endpoint(db, engine, monkeypatch):
+    from app.models import Account, Instrument, LivePrice, SeedHolding
+    db.add_all([
+        Account(id="a", name="ISA", broker="B", currency="KRW", display_order=1),
+        # tech: 005930 value=10*84000=840000
+        SeedHolding(account_id="a", ticker="005930.KS", quantity=10, avg_price=70000),
+        # tech: 000660 value=2*180000=360000
+        SeedHolding(account_id="a", ticker="000660.KS", quantity=2, avg_price=150000),
+        # finance: 105560 value=5*60000=300000
+        SeedHolding(account_id="a", ticker="105560.KS", quantity=5, avg_price=50000),
+        # no Instrument row -> 미분류: 030200 value=1*100000=100000
+        SeedHolding(account_id="a", ticker="030200.KS", quantity=1, avg_price=90000),
+        Instrument(ticker="005930.KS", name="삼성전자", sector="정보기술"),
+        Instrument(ticker="000660.KS", name="SK하이닉스", sector="정보기술"),
+        Instrument(ticker="105560.KS", name="KB금융", sector="금융"),
+    ])
+    db.add_all([
+        LivePrice(ticker="005930.KS", price=84000, currency="KRW",
+                  fetched_at=datetime(2026, 4, 18, 9, 30)),
+        LivePrice(ticker="000660.KS", price=180000, currency="KRW",
+                  fetched_at=datetime(2026, 4, 18, 9, 30)),
+        LivePrice(ticker="105560.KS", price=60000, currency="KRW",
+                  fetched_at=datetime(2026, 4, 18, 9, 30)),
+        LivePrice(ticker="030200.KS", price=100000, currency="KRW",
+                  fetched_at=datetime(2026, 4, 18, 9, 30)),
+    ])
+    db.commit()
+    app = _app_with_engine(engine, monkeypatch)
+    c = TestClient(app)
+    r = c.get("/api/accounts/a/sectors")
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload["currency"] == "KRW"
+    items = payload["items"]
+    # tech 1,200,000 / finance 300,000 / 미분류 100,000 ; total 1,600,000
+    assert [it["sector"] for it in items] == ["정보기술", "금융", "미분류"]
+    assert items[0]["value"] == 1_200_000
+    assert round(items[0]["weight"], 4) == round(1_200_000 / 1_600_000, 4)
+    assert items[2]["sector"] == "미분류"
+    assert items[2]["value"] == 100_000
+    # 404 for unknown account
+    assert c.get("/api/accounts/nope/sectors").status_code == 404
