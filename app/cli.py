@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from app.benchmarks import BENCHMARK_FOR_CURRENCY, backfill_benchmark
 from app.config import get_settings
 from app.db import init_db, make_engine, make_session_factory
-from app.models import Account
+from app.models import Account, Instrument
 from app.prices import backfill_held_prices
+from app.sectors import fetch_sector
 from app.seed import load_seed
 from app.snapshots import recompute_snapshots
 
@@ -31,6 +32,15 @@ def cmd_backfill_prices(*, session: Session, from_date: date, to_date: date) -> 
                                start=from_date, end=to_date + timedelta(days=1))
 
 
+def cmd_backfill_sectors(*, session: Session) -> None:
+    pending = session.query(Instrument).filter(Instrument.sector.is_(None)).all()
+    for inst in pending:
+        sector = fetch_sector(inst.ticker)
+        if sector:
+            inst.sector = sector
+    session.commit()
+
+
 def _today() -> date:
     return date.today()
 
@@ -50,6 +60,8 @@ def main() -> None:
     p_bp.add_argument("--from", dest="from_date", type=date.fromisoformat, required=True)
     p_bp.add_argument("--to", dest="to_date", type=date.fromisoformat, default=None)
 
+    sub.add_parser("backfill-sectors")
+
     args = parser.parse_args()
     settings = get_settings()
     engine = make_engine()
@@ -64,6 +76,8 @@ def main() -> None:
         elif args.cmd == "backfill-prices":
             cmd_backfill_prices(session=session, from_date=args.from_date,
                                 to_date=args.to_date or _today())
+        elif args.cmd == "backfill-sectors":
+            cmd_backfill_sectors(session=session)
 
 
 if __name__ == "__main__":
