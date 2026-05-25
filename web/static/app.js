@@ -350,13 +350,10 @@
       host.innerHTML = `<div class="row-sub">보유 종목이 없습니다.</div>`;
       return;
     }
-    let acc = 0;
-    const stops = items.map((it, i) => {
+    const segs = items.map((it, i) => {
       const c = SECTOR_COLORS[i % SECTOR_COLORS.length];
-      const start = acc * 100, end = (acc + it.weight) * 100;
-      acc += it.weight;
-      return `${c} ${start}% ${end}%`;
-    }).join(', ');
+      return `<span class="sector-seg" style="width:${(it.weight * 100).toFixed(2)}%;background:${c}"></span>`;
+    }).join('');
     const legend = items.map((it, i) => {
       const c = SECTOR_COLORS[i % SECTOR_COLORS.length];
       return `<li class="sector-legend-row">
@@ -367,8 +364,7 @@
     }).join('');
     host.removeAttribute('aria-busy');
     host.innerHTML = `
-      <div class="sector-donut" role="img" aria-label="섹터 비중 도넛 차트"
-           style="background: conic-gradient(${stops})"></div>
+      <div class="sector-bar" role="img" aria-label="섹터 비중 막대 차트">${segs}</div>
       <ul class="sector-legend">${legend}</ul>`;
   }
 
