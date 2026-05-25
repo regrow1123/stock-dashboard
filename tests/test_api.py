@@ -1,9 +1,9 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.models import Account, LivePrice, SeedHolding
+from app.models import Account, LivePrice, Price, SeedHolding
 
 
 def _seed_two_accounts(db):
@@ -215,3 +215,38 @@ def test_sectors_endpoint(db, engine, monkeypatch):
     assert items[2]["value"] == 100_000
     # 404 for unknown account
     assert c.get("/api/accounts/nope/sectors").status_code == 404
+
+
+def test_weights_endpoint_reports_5_10_20_day_changes(db, engine, monkeypatch):
+    # Two KRW holdings, equal value 25 days ago; today A doubled in price.
+    db.add_all([
+        Account(id="a", name="ISA", broker="B", currency="KRW", display_order=1),
+        SeedHolding(account_id="a", ticker="AAA.KS", quantity=10, avg_price=100),
+        SeedHolding(account_id="a", ticker="BBB.KS", quantity=10, avg_price=100),
+    ])
+    base = date.today() - timedelta(days=25)
+    # historical closes: equal at base (forward-filled to all past windows)
+    db.add_all([
+        Price(ticker="AAA.KS", date=base, close=100, currency="KRW"),
+        Price(ticker="BBB.KS", date=base, close=100, currency="KRW"),
+    ])
+    # live prices: A doubled -> A value 2000, B 1000
+    db.add_all([
+        LivePrice(ticker="AAA.KS", price=200, currency="KRW",
+                  fetched_at=datetime(2026, 4, 18, 9, 30)),
+        LivePrice(ticker="BBB.KS", price=100, currency="KRW",
+                  fetched_at=datetime(2026, 4, 18, 9, 30)),
+    ])
+    db.commit()
+    app = _app_with_engine(engine, monkeypatch)
+    c = TestClient(app)
+    r = c.get("/api/accounts/a/weights")
+    assert r.status_code == 200
+    rows = {row["ticker"]: row for row in r.json()}
+    a = rows["AAA.KS"]
+    # current weight 2000/3000 = 0.667, past 0.5 -> +0.1667 across all windows
+    assert round(a["weight"], 3) == 0.667
+    for n in (5, 10, 20):
+        assert round(a[f"change_{n}d"], 3) == 0.167
+        assert round(rows["BBB.KS"][f"change_{n}d"], 3) == -0.167
+    assert c.get("/api/accounts/nope/weights").status_code == 404

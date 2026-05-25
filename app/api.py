@@ -137,63 +137,71 @@ def account_sectors(account_id: str, db: Session = Depends(get_db)):
     return {"currency": acc.currency, "items": items}
 
 
+WEIGHT_CHANGE_WINDOWS = (5, 10, 20)
+
+
+def _weights_as_of(db: Session, account_id: str, ref_date: date) -> dict[str, float]:
+    """Portfolio weights as of `ref_date`, using quantities replayed only up
+    to that date (so same-day buys/sells don't inflate both sides) and closes
+    on-or-before it. Tickers with no close on/before ref_date are excluded so
+    they don't skew the denominator."""
+    seeds = {
+        sh.ticker: sh
+        for sh in db.query(SeedHolding).filter_by(account_id=account_id).all()
+    }
+    trades: dict[str, list[Trade]] = {}
+    for t in (
+        db.query(Trade)
+        .filter_by(account_id=account_id)
+        .filter(Trade.executed_at <= ref_date)
+        .order_by(Trade.executed_at)
+        .all()
+    ):
+        trades.setdefault(t.ticker, []).append(t)
+    values: dict[str, float] = {}
+    for tk in set(seeds) | set(trades):
+        seed = seeds.get(tk)
+        qty, _ = avg_cost_from_seed_and_trades(
+            seed.quantity if seed else 0.0,
+            seed.avg_price if seed else 0.0,
+            trades.get(tk, []),
+        )
+        if qty <= 0:
+            continue
+        close = close_on_or_before(db, tk, ref_date)
+        if close is not None:
+            values[tk] = qty * close
+    total = sum(values.values())
+    return {tk: v / total for tk, v in values.items()} if total > 0 else {}
+
+
 @router.get("/accounts/{account_id}/weights")
 def account_weights(account_id: str, db: Session = Depends(get_db)):
     acc = db.get(Account, account_id)
     if acc is None:
         raise HTTPException(404)
     rows = _holdings_for(db, account_id)
-    yesterday = _effective_today(acc.currency) - timedelta(days=1)
+    today = _effective_today(acc.currency)
     weights = weights_from_values({r["ticker"]: r["value"] for r in rows})
 
-    # yesterday's weights must use yesterday's quantities (replay trades
-    # only up to `yesterday`), otherwise same-day buys/sells get hidden:
-    # a buy that increases qty would inflate both numerator and denominator
-    # by the same amount and the resulting weight_change would only reflect
-    # price drift. If a ticker has no prev_close we exclude it from the
-    # prev total to avoid skewing the denominator.
-    seeds = {
-        sh.ticker: sh
-        for sh in db.query(SeedHolding).filter_by(account_id=account_id).all()
+    past_weights = {
+        n: _weights_as_of(db, account_id, today - timedelta(days=n))
+        for n in WEIGHT_CHANGE_WINDOWS
     }
-    trades_yest: dict[str, list[Trade]] = {}
-    for t in (
-        db.query(Trade)
-        .filter_by(account_id=account_id)
-        .filter(Trade.executed_at <= yesterday)
-        .order_by(Trade.executed_at)
-        .all()
-    ):
-        trades_yest.setdefault(t.ticker, []).append(t)
-    prev_values: dict[str, float] = {}
-    for tk in set(seeds) | set(trades_yest):
-        seed = seeds.get(tk)
-        qty_yest, _ = avg_cost_from_seed_and_trades(
-            seed.quantity if seed else 0.0,
-            seed.avg_price if seed else 0.0,
-            trades_yest.get(tk, []),
-        )
-        if qty_yest <= 0:
-            continue
-        prev = close_on_or_before(db, tk, yesterday)
-        if prev is not None:
-            prev_values[tk] = qty_yest * prev
-    prev_total = sum(prev_values.values())
-    prev_weights = {
-        tk: v / prev_total for tk, v in prev_values.items()
-    } if prev_total > 0 else {}
 
     out = []
     for r in rows:
         tk = r["ticker"]
         cur_w = weights.get(tk, 0.0)
-        prev_w = prev_weights.get(tk)
+        changes = {}
+        for n in WEIGHT_CHANGE_WINDOWS:
+            prev_w = past_weights[n].get(tk)
+            changes[f"change_{n}d"] = (cur_w - prev_w) if prev_w is not None else None
         out.append({
             "ticker": tk,
             "name": r["name"],
             "weight": cur_w,
-            "prev_weight": prev_w,
-            "weight_change": (cur_w - prev_w) if prev_w is not None else None,
+            **changes,
         })
     return out
 

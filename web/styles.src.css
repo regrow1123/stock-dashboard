@@ -317,23 +317,37 @@
   .weight-list { display: grid; gap: 0.625rem; }
   .weight-row {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
     align-items: center;
     gap: 0.5rem;
     font-size: 0.875rem;
   }
   .weight-row .label-txt { color: var(--color-fg); font-weight: 600; }
   .weight-row .pct { color: var(--color-muted); font-variant-numeric: tabular-nums; }
-  .weight-row .day-change {
-    margin-left: 0.5rem;
+  /* 5/10/20-day weight-change columns, smaller font, right of the weight pct */
+  .wc-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1.9rem);
+    gap: 0.0625rem;
+    text-align: right;
+  }
+  .wc-cell {
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
-  .weight-row .day-change.pos { color: var(--color-positive); }
-  .weight-row .day-change.neg { color: var(--color-negative); }
-  .weight-row .day-change.muted { color: var(--color-muted); }
+  .wc-cell.pos { color: var(--color-positive); }
+  .wc-cell.neg { color: var(--color-negative); }
+  .wc-cell.muted { color: var(--color-muted); }
+  .weight-head {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+  .weight-head .wc-grid { grid-column: 3; }
+  .weight-head .wc-cell { color: var(--color-muted); }
   .weight-bar {
     grid-column: 1 / -1;
     height: 6px;

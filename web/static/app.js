@@ -414,24 +414,31 @@
       wrap.innerHTML = `<div class="row-sub">보유 종목 없음</div>`;
       return;
     }
-    const top = [...rows].sort((a, b) => b.weight - a.weight).slice(0, 10);
-    wrap.innerHTML = top.map((r) => {
-      const wc = r.weight_change; // fraction in pp (e.g., 0.012 = +1.2pp)
-      const wcCls = wc == null ? 'muted' : wc >= 0 ? 'pos' : 'neg';
-      // negligible movement (< 0.05pp) → "—" so noise is hushed
-      const wcText = wc == null
+    const WINDOWS = [5, 10, 20];
+    // a weight delta in pp → signed text; negligible (<0.05pp) is hushed to "—"
+    const wcCell = (wc) => {
+      const cls = wc == null ? 'muted' : wc >= 0 ? 'pos' : 'neg';
+      const text = wc == null || Math.abs(wc) < 0.0005
         ? '—'
-        : Math.abs(wc) < 0.00005
-          ? '—'
-          : `${wc >= 0 ? '+' : ''}${(wc * 100).toFixed(2)}%p`;
-      const aria = `${escapeHTML(r.name || r.ticker)} ${pctInt(r.weight)} 비중변화 ${wcText}`;
+        : `${wc >= 0 ? '+' : ''}${(wc * 100).toFixed(1)}`;
+      return `<span class="wc-cell ${cls}">${text}</span>`;
+    };
+    const top = [...rows].sort((a, b) => b.weight - a.weight).slice(0, 10);
+    const header = `
+      <div class="weight-head" aria-hidden="true">
+        <span class="wc-grid">${WINDOWS.map((n) => `<span class="wc-cell">${n}일</span>`).join('')}</span>
+      </div>`;
+    wrap.innerHTML = header + top.map((r) => {
+      const cells = WINDOWS.map((n) => wcCell(r[`change_${n}d`])).join('');
+      const ariaChanges = WINDOWS
+        .map((n) => `${n}일 ${r[`change_${n}d`] == null ? '—' : (r[`change_${n}d`] * 100).toFixed(2) + '%p'}`)
+        .join(' ');
+      const aria = `${escapeHTML(r.name || r.ticker)} ${pctInt(r.weight)} 비중변화 ${ariaChanges}`;
       return `
       <div class="weight-row" aria-label="${aria}">
-        <span class="label-txt">
-          ${escapeHTML(r.name || r.ticker)}
-          <span class="day-change ${wcCls}">${wcText}</span>
-        </span>
+        <span class="label-txt">${escapeHTML(r.name || r.ticker)}</span>
         <span class="pct">${pctInt(r.weight)}</span>
+        <span class="wc-grid" aria-hidden="true">${cells}</span>
         <div class="weight-bar" aria-hidden="true">
           <span style="width: ${(r.weight * 100).toFixed(1)}%"></span>
         </div>
