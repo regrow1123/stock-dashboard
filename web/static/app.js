@@ -424,6 +424,10 @@
       return `<span class="wc-cell ${cls}">${text}</span>`;
     };
     const top = [...rows].sort((a, b) => b.weight - a.weight).slice(0, 10);
+    // US tickers are short/recognizable; names like "Direxion Daily Homebuilders
+    // & Supplies Bull 3X Shares" overflow. Show ticker for USD accounts.
+    const isUsd = window.ACCOUNT_CURRENCY === 'USD';
+    const labelOf = (r) => isUsd ? r.ticker : (r.name || r.ticker);
     const header = `
       <div class="weight-head" aria-hidden="true">
         <span class="wc-grid">${WINDOWS.map((n) => `<span class="wc-cell">${n}일</span>`).join('')}</span>
@@ -433,10 +437,10 @@
       const ariaChanges = WINDOWS
         .map((n) => `${n}일 ${r[`change_${n}d`] == null ? '—' : (r[`change_${n}d`] * 100).toFixed(2) + '%p'}`)
         .join(' ');
-      const aria = `${escapeHTML(r.name || r.ticker)} ${pctInt(r.weight)} 비중변화 ${ariaChanges}`;
+      const aria = `${escapeHTML(labelOf(r))} ${pctInt(r.weight)} 비중변화 ${ariaChanges}`;
       return `
       <div class="weight-row" aria-label="${aria}">
-        <span class="label-txt">${escapeHTML(r.name || r.ticker)}</span>
+        <span class="label-txt">${escapeHTML(labelOf(r))}</span>
         <span class="pct">${pctInt(r.weight)}</span>
         <span class="wc-grid" aria-hidden="true">${cells}</span>
         <div class="weight-bar" aria-hidden="true">
