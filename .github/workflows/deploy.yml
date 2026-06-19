@@ -9,14 +9,14 @@ jobs:
     runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v4
-      - name: rsync to superhome
+      - name: Deploy to superhome
         run: |
-          rsync -avz --delete \
-            -e "ssh -i /home/sunday/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+          tar czf - \
             --exclude=.git \
             --exclude=data \
             --exclude=.env \
             --exclude=cloudflared/credentials.json \
             --exclude=.github \
-            $GITHUB_WORKSPACE/ sund4y1123@superhome:/volume1/docker/stock-dashboard/
-          ssh -i /home/sunday/.ssh/id_ed25519 -o StrictHostKeyChecking=no sund4y1123@superhome "touch /volume1/docker/stock-dashboard/app/__init__.py"
+            -C $GITHUB_WORKSPACE . | \
+          ssh -i /home/sunday/.ssh/id_ed25519 -o StrictHostKeyChecking=no sund4y1123@superhome \
+            "cd /volume1/docker/stock-dashboard && tar xzf -"
