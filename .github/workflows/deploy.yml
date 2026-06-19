@@ -20,3 +20,7 @@ jobs:
             -C $GITHUB_WORKSPACE . | \
           ssh -i /home/sunday/.ssh/id_ed25519 -o StrictHostKeyChecking=no sund4y1123@superhome \
             "cd /volume1/docker/stock-dashboard && tar xzf -"
+      - name: Restart containers via DSM API
+        run: |
+          ssh -i /home/sunday/.ssh/id_ed25519 -o StrictHostKeyChecking=no sund4y1123@superhome \
+            "DSM_PASSWORD='${{ secrets.DSM_PASSWORD }}' bash /volume1/docker/stock-dashboard/scripts/restart_container.sh"
