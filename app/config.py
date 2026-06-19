@@ -13,15 +13,12 @@ class Settings(BaseSettings):
     tg_webhook_secret: str
     tg_polling: bool = True
     claude_bin: str = "claude"
-    db_path: Path = Path("./data/dashboard.db")
+    db_url: str = "postgresql://stock:stock@db:5432/stock_dashboard"
+    data_dir: Path = Path("./data")
     seed_path: Path = Path("./seed/initial_holdings.yaml")
     host: str = "0.0.0.0"
     port: int = 8080
     tz: str = "Asia/Seoul"
-
-    @property
-    def db_url(self) -> str:
-        return f"sqlite:///{self.db_path}"
 
 
 @lru_cache

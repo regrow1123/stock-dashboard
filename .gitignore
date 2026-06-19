@@ -20,3 +20,6 @@ web/static/styles.css
 
 # Personal data — keep only the .example file in repo
 seed/initial_holdings.yaml
+
+# Local deploy script
+deploy.sh

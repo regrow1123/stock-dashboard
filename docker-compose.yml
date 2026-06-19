@@ -11,5 +11,20 @@ services:
     volumes:
       - ./data:/app/data
       - ./seed:/app/seed:ro
-      - ${HOME}/.claude:/home/appuser/.claude   # reuse host claude auth
+      - ${HOME}/.claude:/home/appuser/.claude
       - ${HOME}/.claude.json:/home/appuser/.claude.json
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stock_dashboard
+      POSTGRES_USER: stock
+      POSTGRES_PASSWORD: stock
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

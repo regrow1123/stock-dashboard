@@ -90,7 +90,7 @@ def get_cache() -> KrxCache:
         from app.config import get_settings
 
         settings = get_settings()
-        pkl = settings.db_path.parent / "krx_cache.pkl"
+        pkl = settings.data_dir / "krx_cache.pkl"
         _default_cache = KrxCache(persist_path=pkl)
         # Auto-hydrate from pickle on first access. The MCP server runs as a
         # short-lived stdio child of `claude -p` that does not call create_app,

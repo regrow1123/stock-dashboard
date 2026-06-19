@@ -1,0 +1,21 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, mylaptop]
+    steps:
+      - uses: actions/checkout@v4
+      - name: rsync to superhome
+        run: |
+          rsync -av --delete \
+            --exclude=.git \
+            --exclude=data \
+            --exclude=.env \
+            --exclude=cloudflared/credentials.json \
+            --exclude=.github \
+            $GITHUB_WORKSPACE/ sund4y1123@superhome:/volume1/docker/stock-dashboard/
+          ssh sund4y1123@superhome "touch /volume1/docker/stock-dashboard/app/__init__.py"
