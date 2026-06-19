@@ -11,8 +11,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./seed:/app/seed:ro
-      - ${HOME}/.claude:/home/appuser/.claude
-      - ${HOME}/.claude.json:/home/appuser/.claude.json
     depends_on:
       - db
 

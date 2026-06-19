@@ -23,3 +23,7 @@ seed/initial_holdings.yaml
 
 # Local deploy script
 deploy.sh
+
+# Claude auth (contains credentials)
+.claude/
+.claude.json
