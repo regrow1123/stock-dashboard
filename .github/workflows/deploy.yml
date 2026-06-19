@@ -11,11 +11,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: rsync to superhome
         run: |
-          rsync -av --delete \
+          rsync -avz --delete \
+            -e "ssh -i /home/sunday/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
             --exclude=.git \
             --exclude=data \
             --exclude=.env \
             --exclude=cloudflared/credentials.json \
             --exclude=.github \
             $GITHUB_WORKSPACE/ sund4y1123@superhome:/volume1/docker/stock-dashboard/
-          ssh sund4y1123@superhome "touch /volume1/docker/stock-dashboard/app/__init__.py"
+          ssh -i /home/sunday/.ssh/id_ed25519 -o StrictHostKeyChecking=no sund4y1123@superhome "touch /volume1/docker/stock-dashboard/app/__init__.py"
