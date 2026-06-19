@@ -5,7 +5,7 @@ DSM_HOST="superhome"
 DSM_PORT="5000"
 DSM_USER="sund4y1123"
 DSM_PASS="$DSM_PASSWORD"
-PROJECT_ID="7f629b3e-620a-46da-bf40-a421d236b8c8"
+PROJECT_ID="419a2239-aef7-4f7f-b367-7782a4d5094e"
 
 # Login and get SID
 SID=$(curl -s "http://${DSM_HOST}:${DSM_PORT}/webapi/entry.cgi?api=SYNO.API.Auth&version=6&method=login&account=${DSM_USER}&passwd=${DSM_PASS}&format=sid" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('sid',''))")
