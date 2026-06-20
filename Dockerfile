@@ -35,5 +35,4 @@ RUN chmod +x /app/entrypoint.sh \
  && chown -R 1000:1000 /app/data /home/appuser
 
 EXPOSE 8080
-ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
