@@ -11,6 +11,13 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
+# Initialize tables
+python3 -c "
+from app.db import make_engine, init_db
+init_db(make_engine('${DB_URL}'))
+print('Tables initialized')
+" 2>/dev/null || echo "Table init skipped"
+
 # Check if PostgreSQL already has data
 HAS_DATA=$(python3 -c "
 from sqlalchemy import create_engine, text
