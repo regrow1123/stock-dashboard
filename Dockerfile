@@ -27,11 +27,8 @@ COPY web ./web
 COPY seed ./seed
 COPY mcp.json ./mcp.json
 COPY --from=css /src/web/static/styles.css ./web/static/styles.css
-COPY docker/entrypoint.sh /app/entrypoint.sh
-COPY migrate_to_pg.py /app/migrate_to_pg.py
 
-RUN chmod +x /app/entrypoint.sh \
- && mkdir -p /app/data /home/appuser \
+RUN mkdir -p /app/data /home/appuser \
  && chown -R 1000:1000 /app/data /home/appuser
 
 EXPOSE 8080
